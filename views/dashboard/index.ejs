@@ -2,394 +2,351 @@
 
 <!-- Today Header -->
 <div class="dashboard-header-row">
-  <div class="dashboard-title">Tổng quan</div>
+	<div class="dashboard-title">Tổng quan</div>
 </div>
 <!-- Stats Cards -->
 <div class="stats-container">
-  <div class="stat-card">
-    <div class="stat-card-title">Tổng đơn hàng</div>
-    <div id="total-order" class="stat-card-value green">--</div>
-  </div>
-  <div class="stat-card">
-    <div class="stat-card-title">Đơn hàng hoàn thành</div>
-    <div id="completed-order" class="stat-card-value green">--</div>
-  </div>
-  <div class="stat-card">
-    <div class="stat-card-title">Đang vận chuyển</div>
-    <div id="shipping-order" class="stat-card-value yellow">--</div>
-  </div>
-  <div class="stat-card">
-    <div class="stat-card-title">
-      Doanh thu tháng này <span id="month-name">--</span>
-      <span class="info-icon" tabindex="0">
-        <i class="fa fa-info-circle"></i>
-        <div class="tooltip">
-          Doanh thu design:
-          <span id="revenue-this-month-design-detail">--</span>
-        </div>
-      </span>
-    </div>
-    <div id="revenue-this-month" class="stat-card-value green">--</div>
-  </div>
-  <div class="stat-card">
-    <div class="stat-card-title">
-      Tổng doanh thu
-      <span class="info-icon" tabindex="0">
-        <i class="fa fa-info-circle"></i>
-        <div class="tooltip">
-          Doanh thu design: <span id="revenue-total-design-detail">--</span>
-        </div>
-      </span>
-    </div>
-    <div id="revenue-total" class="stat-card-value green">--</div>
-  </div>
+	<div class="stat-card">
+		<div class="stat-card-title">Tổng đơn hàng</div>
+		<div id="total-order" class="stat-card-value green">--</div>
+	</div>
+	<div class="stat-card">
+		<div class="stat-card-title">Đơn hàng hoàn thành</div>
+		<div id="completed-order" class="stat-card-value green">--</div>
+	</div>
+	<div class="stat-card">
+		<div class="stat-card-title">Đang vận chuyển</div>
+		<div id="shipping-order" class="stat-card-value yellow">--</div>
+	</div>
+	<div class="stat-card">
+		<div class="stat-card-title">
+			Doanh thu tháng này <span id="month-name">--</span>
+			<span class="info-icon" tabindex="0">
+				<i class="fa fa-info-circle"></i>
+				<div class="tooltip">
+					Doanh thu design:
+					<span id="revenue-this-month-design-detail">--</span>
+				</div>
+			</span>
+		</div>
+		<div id="revenue-this-month" class="stat-card-value green">--</div>
+	</div>
+	<div class="stat-card">
+		<div class="stat-card-title">
+			Tổng doanh thu
+			<span class="info-icon" tabindex="0">
+				<i class="fa fa-info-circle"></i>
+				<div class="tooltip">Doanh thu design: <span id="revenue-total-design-detail">--</span></div>
+			</span>
+		</div>
+		<div id="revenue-total" class="stat-card-value green">--</div>
+	</div>
 </div>
 
 <div class="dashboard-charts-row">
-  <div class="revenue-chart-container">
-    <div class="chart-header">
-      <div class="chart-title">Doanh thu</div>
-      <div class="chart-header-right">
-        <select id="revenue-period-select">
-          <option value="day">Theo ngày</option>
-          <option value="month">Theo tháng</option>
-          <option value="year">Theo năm</option>
-        </select>
-        <input
-          id="revenue-date-picker"
-          placeholder="Chọn ngày"
-          style="display: inline-block"
-        />
-        <input
-          id="revenue-month-picker"
-          placeholder="Chọn tháng"
-          style="display: none"
-        />
-        <select id="revenue-year-select" style="display: none">
-          <!-- Sinh các option năm động -->
-        </select>
-      </div>
-    </div>
-    <div class="chart-wrapper">
-      <canvas id="revenueChart"></canvas>
-    </div>
-  </div>
+	<div class="revenue-chart-container">
+		<div class="chart-header">
+			<div class="chart-title">Doanh thu</div>
+			<div class="chart-header-right">
+				<select id="revenue-period-select">
+					<option value="day">Theo ngày</option>
+					<option value="month">Theo tháng</option>
+					<option value="year">Theo năm</option>
+				</select>
+				<input id="revenue-date-picker" placeholder="Chọn ngày" style="display: inline-block" />
+				<input id="revenue-month-picker" placeholder="Chọn tháng" style="display: none" />
+				<select id="revenue-year-select" style="display: none">
+					<!-- Sinh các option năm động -->
+				</select>
+			</div>
+		</div>
+		<div class="chart-wrapper">
+			<canvas id="revenueChart"></canvas>
+		</div>
+	</div>
 
-  <div class="revenue-chart-container">
-    <div class="chart-header">
-      <div class="chart-title">Người dùng mới</div>
-    </div>
-    <div class="chart-wrapper">
-      <canvas id="userChart"></canvas>
-    </div>
-  </div>
+	<div class="revenue-chart-container">
+		<div class="chart-header">
+			<div class="chart-title">Người dùng mới</div>
+		</div>
+		<div class="chart-wrapper">
+			<canvas id="userChart"></canvas>
+		</div>
+	</div>
 </div>
 
 <link rel="stylesheet" href="/javascripts/flatpickr/flatpickr.min.css" />
 <script src="/javascripts/flatpickr/flatpickr.min.js"></script>
 <script src="/javascripts/flatpickr/plugins/monthSelect/index.js"></script>
-<link
-  rel="stylesheet"
-  href="/javascripts/flatpickr/plugins/monthSelect/style.css"
-/>
+<link rel="stylesheet" href="/javascripts/flatpickr/plugins/monthSelect/style.css" />
 <script src="/javascripts/chart/chart.umd.js"></script>
 <script src="/dayjs/dayjs.min.js"></script>
 
 <script>
-  let revenueChartInstance = null;
-  let userChartInstance = null;
-  document.addEventListener("DOMContentLoaded", async () => {
-    // tooltip
-    document.querySelectorAll(".info-icon").forEach((icon) => {
-      icon.addEventListener("click", function (e) {
-        e.stopPropagation();
-        this.classList.toggle("active");
-      });
-    });
-    document.addEventListener("click", function () {
-      document.querySelectorAll(".info-icon.active").forEach((activeIcon) => {
-        activeIcon.classList.remove("active");
-      });
-    });
+	let revenueChartInstance = null;
+	let userChartInstance = null;
+	document.addEventListener("DOMContentLoaded", async () => {
+		// tooltip
+		document.querySelectorAll(".info-icon").forEach((icon) => {
+			icon.addEventListener("click", function (e) {
+				e.stopPropagation();
+				this.classList.toggle("active");
+			});
+		});
+		document.addEventListener("click", function () {
+			document.querySelectorAll(".info-icon.active").forEach((activeIcon) => {
+				activeIcon.classList.remove("active");
+			});
+		});
 
-    // Khởi tạo year select
-    const yearSelect = document.getElementById("revenue-year-select");
-    const thisYear = new Date().getFullYear();
-    for (let y = thisYear; y >= 2018; y--) {
-      let opt = document.createElement("option");
-      opt.value = opt.text = y;
-      yearSelect.add(opt);
-    }
-    yearSelect.addEventListener("change", function () {
-      const type = "year";
-      fetchRevenue({ type, from: this.value, to: this.value });
-    });
-    // Flatpickr Ngày (range)
-    flatpickr("#revenue-date-picker", {
-      mode: "range",
-      dateFormat: "Y-m-d",
-      onChange: function (selectedDates) {
-        if (selectedDates.length === 2) {
-          const from = dayjs(selectedDates[0]).format("YYYY-MM-DD");
-          const to = dayjs(selectedDates[1]).format("YYYY-MM-DD");
-          fetchRevenue({ type: "day", from, to });
-        }
-      },
-    });
+		// Khởi tạo year select
+		const yearSelect = document.getElementById("revenue-year-select");
+		const thisYear = new Date().getFullYear();
+		for (let y = thisYear; y >= 2018; y--) {
+			let opt = document.createElement("option");
+			opt.value = opt.text = y;
+			yearSelect.add(opt);
+		}
+		yearSelect.addEventListener("change", function () {
+			const type = "year";
+			fetchRevenue({ type, from: this.value, to: this.value });
+		});
+		// Flatpickr Ngày (range)
+		flatpickr("#revenue-date-picker", {
+			mode: "range",
+			dateFormat: "Y-m-d",
+			onChange: function (selectedDates) {
+				if (selectedDates.length === 2) {
+					const from = dayjs(selectedDates[0]).format("YYYY-MM-DD");
+					const to = dayjs(selectedDates[1]).format("YYYY-MM-DD");
+					fetchRevenue({ type: "day", from, to });
+				}
+			},
+		});
 
-    // Flatpickr Tháng
-    flatpickr("#revenue-month-picker", {
-      plugins: [new monthSelectPlugin({ shorthand: true, dateFormat: "Y-m" })],
-      onChange: function (selectedDates, dateStr) {
-        if (dateStr) {
-          fetchRevenue({ type: "month", from: dateStr, to: dateStr });
-        }
-      },
-    });
+		// Flatpickr Tháng
+		flatpickr("#revenue-month-picker", {
+			plugins: [new monthSelectPlugin({ shorthand: true, dateFormat: "Y-m" })],
+			onChange: function (selectedDates, dateStr) {
+				if (dateStr) {
+					fetchRevenue({ type: "month", from: dateStr, to: dateStr });
+				}
+			},
+		});
 
-    // Period select event
-    document
-      .getElementById("revenue-period-select")
-      .addEventListener("change", function () {
-        const val = this.value;
-        document.getElementById("revenue-date-picker").style.display =
-          val === "day" ? "inline-block" : "none";
-        document.getElementById("revenue-month-picker").style.display =
-          val === "month" ? "inline-block" : "none";
-        document.getElementById("revenue-year-select").style.display =
-          val === "year" ? "inline-block" : "none";
-        // Fetch mặc định theo type
-        fetchRevenue({ type: val });
-      });
+		// Period select event
+		document.getElementById("revenue-period-select").addEventListener("change", function () {
+			const val = this.value;
+			document.getElementById("revenue-date-picker").style.display = val === "day" ? "inline-block" : "none";
+			document.getElementById("revenue-month-picker").style.display = val === "month" ? "inline-block" : "none";
+			document.getElementById("revenue-year-select").style.display = val === "year" ? "inline-block" : "none";
+			// Fetch mặc định theo type
+			fetchRevenue({ type: val });
+		});
 
-    // Load mặc định
-    renderStats();
-    await fetchRevenue({ type: "day" });
-    await fetchUser({ type: "month" });
-  });
+		// Load mặc định
+		renderStats();
+		await fetchRevenue({ type: "day" });
+		await fetchUser({ type: "month" });
+	});
 
-  async function fetchRevenue(params = { type: "day" }) {
-    let qs = Object.entries(params)
-      .map(([k, v]) => `${k}=${v}`)
-      .join("&");
-    const res = await fetch(`/api/revenue?${qs}`);
-    const data = await res.json();
-    renderRevenueChart(data);
-    return data;
-  }
+	async function fetchRevenue(params = { type: "day" }) {
+		let qs = Object.entries(params)
+			.map(([k, v]) => `${k}=${v}`)
+			.join("&");
+		const res = await fetch(`/api/revenue?${qs}`);
+		const data = await res.json();
+		renderRevenueChart(data);
+		return data;
+	}
 
-  function formatNumberVN(number) {
-    if (number === 0) return "0";
-    if (number < 1000) return number.toString();
-    if (number < 1000000)
-      return (number / 1000).toString().replace(/\.0$/, "") + "N"; // Nghìn
-    if (number < 1000000000) {
-      // Triệu, lấy tối đa 1 số lẻ (1.2TR), bỏ .0 nếu là số tròn
-      let val = (number / 1000000).toFixed(1);
-      if (val.endsWith(".0")) val = val.slice(0, -2);
-      return val + "TR";
-    }
-    // Tỷ, cũng lấy tối đa 1 số lẻ, bỏ .0 nếu là số tròn
-    let val = (number / 1000000000).toFixed(1);
-    if (val.endsWith(".0")) val = val.slice(0, -2);
-    return val + "Tỷ";
-  }
+	function formatNumberVN(number) {
+		if (number === 0) return "0";
+		if (number < 1000) return number.toString();
+		if (number < 1000000) return (number / 1000).toString().replace(/\.0$/, "") + "N"; // Nghìn
+		if (number < 1000000000) {
+			// Triệu, lấy tối đa 1 số lẻ (1.2TR), bỏ .0 nếu là số tròn
+			let val = (number / 1000000).toFixed(1);
+			if (val.endsWith(".0")) val = val.slice(0, -2);
+			return val + "TR";
+		}
+		// Tỷ, cũng lấy tối đa 1 số lẻ, bỏ .0 nếu là số tròn
+		let val = (number / 1000000000).toFixed(1);
+		if (val.endsWith(".0")) val = val.slice(0, -2);
+		return val + "Tỷ";
+	}
 
-  async function fetchUser(params = { type: "month" }) {
-    let qs = Object.entries(params)
-      .map(([k, v]) => `${k}=${v}`)
-      .join("&");
-    const res = await fetch(`/api/revenue/user?${qs}`);
-    const data = await res.json();
-    renderUserChart(data);
-    return data;
-  }
+	async function fetchUser(params = { type: "month" }) {
+		let qs = Object.entries(params)
+			.map(([k, v]) => `${k}=${v}`)
+			.join("&");
+		const res = await fetch(`/api/revenue/user?${qs}`);
+		const data = await res.json();
+		renderUserChart(data);
+		return data;
+	}
 
-  async function fetchStats() {
-    const res = await fetch("/api/revenue/stats");
-    return await res.json();
-  }
+	async function fetchStats() {
+		const res = await fetch("/api/revenue/stats");
+		return await res.json();
+	}
 
-  async function renderStats() {
-    const stats = await fetchStats();
+	async function renderStats() {
+		const stats = await fetchStats();
 
-    document.getElementById("total-order").textContent =
-      stats.totalOrder ?? "--";
-    document.getElementById("completed-order").textContent =
-      stats.completedOrder ?? "--";
-    document.getElementById("shipping-order").textContent =
-      stats.shippingOrder ?? "--";
+		document.getElementById("total-order").textContent = stats.totalOrder ?? "--";
+		document.getElementById("completed-order").textContent = stats.completedOrder ?? "--";
+		document.getElementById("shipping-order").textContent = stats.shippingOrder ?? "--";
 
-    document.getElementById("revenue-this-month").textContent =
-      Number(stats.revenueThisMonth.total).toLocaleString() + " VNĐ";
-    document.getElementById("revenue-total").textContent =
-      Number(stats.revenueTotal.total).toLocaleString() + " VNĐ";
-    document.getElementById("revenue-this-month-design-detail").textContent =
-      Number(stats.revenueThisMonth.design).toLocaleString() + " VNĐ";
-    document.getElementById("revenue-total-design-detail").textContent =
-      Number(stats.revenueTotal.design).toLocaleString() + " VNĐ";
+		document.getElementById("revenue-this-month").textContent = Number(stats.revenueThisMonth.total).toLocaleString() + " VNĐ";
+		document.getElementById("revenue-total").textContent = Number(stats.revenueTotal.total).toLocaleString() + " VNĐ";
+		document.getElementById("revenue-this-month-design-detail").textContent = Number(stats.revenueThisMonth.design).toLocaleString() + " VNĐ";
+		document.getElementById("revenue-total-design-detail").textContent = Number(stats.revenueTotal.design).toLocaleString() + " VNĐ";
 
-    document.getElementById("month-name").textContent = stats.monthName;
-  }
+		document.getElementById("month-name").textContent = stats.monthName;
+	}
 
-  function renderRevenueChart(revenueData) {
-    // Destroy chart cũ nếu có
-    if (revenueChartInstance) revenueChartInstance.destroy();
+	function renderRevenueChart(revenueData) {
+		// Destroy chart cũ nếu có
+		if (revenueChartInstance) revenueChartInstance.destroy();
 
-    const revenueLabels = revenueData.map((item) => item.date);
-    const totalRevenue = revenueData.map(
-      (item) => (item.orderRevenue || 0) + (item.designRevenue || 0)
-    );
-    const orderRevenue = revenueData.map((item) => item.orderRevenue || 0);
-    const designRevenue = revenueData.map((item) => item.designRevenue || 0);
-    const periodType = document.getElementById("revenue-period-select").value;
-    const xAxisLabel =
-      periodType === "day" ? "Ngày" : periodType === "month" ? "Tháng" : "Năm";
+		const revenueLabels = revenueData.map((item) => item.date);
+		const totalRevenue = revenueData.map((item) => (item.orderRevenue || 0) + (item.designRevenue || 0));
+		const orderRevenue = revenueData.map((item) => item.orderRevenue || 0);
+		const designRevenue = revenueData.map((item) => item.designRevenue || 0);
+		const periodType = document.getElementById("revenue-period-select").value;
+		const xAxisLabel = periodType === "day" ? "Ngày" : periodType === "month" ? "Tháng" : "Năm";
 
-    revenueChartInstance = new Chart(
-      document.getElementById("revenueChart").getContext("2d"),
-      {
-        type: "line",
-        data: {
-          labels: revenueLabels,
-          datasets: [
-            {
-              label: "Tổng doanh thu",
-              data: totalRevenue,
-              borderColor: "rgba(75,192,192,1)",
-              backgroundColor: "rgba(75,192,192,1)",
-              tension: 0.3,
-              pointRadius: 3,
-              pointHoverRadius: 3,
-              fill: false,
-              borderWidth: 1.5,
-            },
-          ],
-        },
-        options: {
-          responsive: true,
-          plugins: {
-            legend: {
-              display: true,
-              labels: {
-                font: {
-                  size: 11,
-                  family: "'Inter', Arial, sans-serif",
-                  weight: "500",
-                },
-                color: "#555",
-                boxWidth: 10,
-                boxHeight: 10,
-                padding: 12,
-              },
-              align: "end",
-            },
-            tooltip: {
-              enabled: true,
-              callbacks: {
-                label: function (context) {
-                  const idx = context.dataIndex;
-                  return [
-                    `Tổng doanh thu: ${Number(
-                      totalRevenue[idx]
-                    ).toLocaleString()} VNĐ`,
-                    `Đơn hàng: ${Number(
-                      orderRevenue[idx]
-                    ).toLocaleString()} VNĐ`,
-                    `Design: ${Number(
-                      designRevenue[idx]
-                    ).toLocaleString()} VNĐ`,
-                  ];
-                },
-              },
-            },
-          },
-          scales: {
-            x: { title: { display: true, text: xAxisLabel } },
-            y: {
-              beginAtZero: true,
-              ticks: {
-                callback: function (value) {
-                  return formatNumberVN(value);
-                },
-              },
-            },
-          },
-        },
-      }
-    );
-  }
+		revenueChartInstance = new Chart(document.getElementById("revenueChart").getContext("2d"), {
+			type: "line",
+			data: {
+				labels: revenueLabels,
+				datasets: [
+					{
+						label: "Tổng doanh thu",
+						data: totalRevenue,
+						borderColor: "rgba(75,192,192,1)",
+						backgroundColor: "rgba(75,192,192,1)",
+						tension: 0.3,
+						pointRadius: 3,
+						pointHoverRadius: 3,
+						fill: false,
+						borderWidth: 1.5,
+					},
+				],
+			},
+			options: {
+				responsive: true,
+				plugins: {
+					legend: {
+						display: true,
+						labels: {
+							font: {
+								size: 11,
+								family: "'Inter', Arial, sans-serif",
+								weight: "500",
+							},
+							color: "#555",
+							boxWidth: 10,
+							boxHeight: 10,
+							padding: 12,
+						},
+						align: "end",
+					},
+					tooltip: {
+						enabled: true,
+						callbacks: {
+							label: function (context) {
+								const idx = context.dataIndex;
+								return [
+									`Tổng doanh thu: ${Number(totalRevenue[idx]).toLocaleString()} VNĐ`,
+									`Đơn hàng: ${Number(orderRevenue[idx]).toLocaleString()} VNĐ`,
+									`Design: ${Number(designRevenue[idx]).toLocaleString()} VNĐ`,
+								];
+							},
+						},
+					},
+				},
+				scales: {
+					x: { title: { display: true, text: xAxisLabel } },
+					y: {
+						beginAtZero: true,
+						ticks: {
+							callback: function (value) {
+								return formatNumberVN(value);
+							},
+						},
+					},
+				},
+			},
+		});
+	}
 
-  function renderUserChart(userData) {
-    if (userChartInstance) userChartInstance.destroy();
+	function renderUserChart(userData) {
+		if (userChartInstance) userChartInstance.destroy();
 
-    const userLabels = userData.map((item) => item.date);
-    const userCounts = userData.map((item) => item.userCount);
+		const userLabels = userData.map((item) => item.date);
+		const userCounts = userData.map((item) => item.userCount);
 
-    userChartInstance = new Chart(
-      document.getElementById("userChart").getContext("2d"),
-      {
-        type: "bar",
-        data: {
-          labels: userLabels,
-          datasets: [
-            {
-              label: "Người dùng mới",
-              data: userCounts,
-              backgroundColor: "rgba(54, 162, 235, 0.7)",
-              borderRadius: 6,
-              maxBarThickness: 32,
-              barPercentage: 0.7,
-            },
-          ],
-        },
-        options: {
-          responsive: true,
-          plugins: {
-            legend: {
-              display: true,
-              labels: {
-                font: {
-                  size: 11,
-                  family: "'Inter', Arial, sans-serif",
-                  weight: "500",
-                },
-                color: "#555",
-                boxWidth: 10,
-                boxHeight: 10,
-                padding: 16,
-              },
-              align: "end",
-            },
-            tooltip: {
-              enabled: true,
-              callbacks: {
-                label: function (context) {
-                  return `Người dùng mới: ${context.parsed.y}`;
-                },
-              },
-            },
-          },
-          layout: {
-            padding: {
-              top: 8,
-            },
-          },
-          scales: {
-            x: {
-              title: { display: true, text: "Tháng" },
-              grid: { display: false },
-            },
-            y: {
-              beginAtZero: true,
-              min: 0,
-              ticks: {
-
-              },
-            },
-          },
-        },
-      }
-    );
-  }
+		userChartInstance = new Chart(document.getElementById("userChart").getContext("2d"), {
+			type: "bar",
+			data: {
+				labels: userLabels,
+				datasets: [
+					{
+						label: "Người dùng mới",
+						data: userCounts,
+						backgroundColor: "rgba(54, 162, 235, 0.7)",
+						borderRadius: 6,
+						maxBarThickness: 32,
+						barPercentage: 0.7,
+					},
+				],
+			},
+			options: {
+				responsive: true,
+				plugins: {
+					legend: {
+						display: true,
+						labels: {
+							font: {
+								size: 11,
+								family: "'Inter', Arial, sans-serif",
+								weight: "500",
+							},
+							color: "#555",
+							boxWidth: 10,
+							boxHeight: 10,
+							padding: 16,
+						},
+						align: "end",
+					},
+					tooltip: {
+						enabled: true,
+						callbacks: {
+							label: function (context) {
+								return `Người dùng mới: ${context.parsed.y}`;
+							},
+						},
+					},
+				},
+				layout: {
+					padding: {
+						top: 8,
+					},
+				},
+				scales: {
+					x: {
+						title: { display: true, text: "Tháng" },
+						grid: { display: false },
+					},
+					y: {
+						beginAtZero: true,
+						min: 0,
+						ticks: {},
+					},
+				},
+			},
+		});
+	}
 </script>

@@ -61,8 +61,8 @@ exports.verifyToken = async (req, res, next) => {
     }
 
     // Kiểm tra xem user có tồn tại trong database
-    const [users] = await db.query(
-      "SELECT user_id, user_gmail, user_role FROM user WHERE user_id = ?",
+    const { rows: users } = await db.query(
+      'SELECT user_id, user_gmail, user_role FROM "user" WHERE user_id = $1',
       [userId]
     );
 
@@ -125,8 +125,8 @@ exports.isAdmin = async (req, res, next) => {
         .json({ error: "Forbidden - Admin access required" });
     }
 
-    const [adminCheck] = await db.query(
-      "SELECT user_role FROM user WHERE user_id = ?",
+    const { rows: adminCheck } = await db.query(
+      'SELECT user_role FROM "user" WHERE user_id = $1',
       [req.user.id]
     );
     const allowedRoles = ["admin", "staff"];
@@ -180,10 +180,11 @@ exports.optionalAuth = async (req, res, next) => {
     if (!userId) return next();
 
     // Kiểm tra user trong database
-    const [[user]] = await db.query(
-      "SELECT user_id, user_gmail, user_role FROM user WHERE user_id = ?",
+    const { rows } = await db.query(
+      'SELECT user_id, user_gmail, user_role FROM "user" WHERE user_id = $1',
       [userId]
     );
+    const user = rows[0];
 
     if (user) {
       req.user = {

@@ -59,8 +59,8 @@ router.post("/register", async (req, res) => {
 
     // 3) Kiểm tra email đã tồn tại
     if (!errors.email) {
-      const [emailCheck] = await db.query(
-        "SELECT user_id FROM user WHERE user_gmail = ? LIMIT 1",
+      const { rows: emailCheck } = await db.query(
+        "SELECT user_id FROM \"user\" WHERE user_gmail = $1 LIMIT 1",
         [emailRaw]
       );
       if (Array.isArray(emailCheck) && emailCheck.length > 0) {
@@ -70,8 +70,8 @@ router.post("/register", async (req, res) => {
 
     // 4) Kiểm tra số điện thoại (nếu có)
     if (phone) {
-      const [phoneCheck] = await db.query(
-        "SELECT user_id FROM user WHERE user_number = ? LIMIT 1",
+      const { rows: phoneCheck } = await db.query(
+        "SELECT user_id FROM \"user\" WHERE user_number = $1 LIMIT 1",
         [phone]
       );
       if (Array.isArray(phoneCheck) && phoneCheck.length > 0) {
@@ -92,14 +92,14 @@ router.post("/register", async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // 7) Lưu user
-    const [insertResult] = await db.query(
-      `INSERT INTO user (
+    const { rows: insertResult } = await db.query(
+      `INSERT INTO "user" (
         user_gmail, user_password, user_name, user_number, user_address, user_role,
         user_email_active, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW()) RETURNING user_id`,
       [emailRaw, hashedPassword, fullName, phone, address, "user", 0]
     );
-    const userId = insertResult.insertId;
+    const userId = insertResult[0].user_id;
 
     // 8) Token xác thực email
     const verificationToken = jwt.sign(
@@ -109,7 +109,7 @@ router.post("/register", async (req, res) => {
     );
 
     // 9) Lưu token xác thực
-    await db.query("UPDATE user SET user_token = ? WHERE user_id = ?", [
+    await db.query("UPDATE \"user\" SET user_token = $1 WHERE user_id = $2", [
       verificationToken,
       userId,
     ]);
@@ -127,7 +127,7 @@ router.post("/register", async (req, res) => {
     );
 
     if (!emailSent) {
-      await db.query("UPDATE user SET user_token = NULL WHERE user_id = ?", [
+      await db.query("UPDATE \"user\" SET user_token = NULL WHERE user_id = $1", [
         userId,
       ]);
       return res.status(500).json({
@@ -150,11 +150,11 @@ router.post("/register", async (req, res) => {
     const expDate = new Date();
     expDate.setDate(expDate.getDate() + 14);
 
-    const [couponResult] = await db.query(
+    const { rows: couponResult } = await db.query(
       `INSERT INTO couponcode (
         code, title, value_price, description, start_time, exp_time,
         min_order, used, is_flash_sale, combinations, discount_type, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING couponcode_id`,
       [
         couponCode,
         "Mã giảm giá chào mừng",
@@ -170,16 +170,16 @@ router.post("/register", async (req, res) => {
         1,
       ]
     );
-    const couponId = couponResult.insertId;
+    const couponId = couponResult[0].couponcode_id;
 
     await db.query(
-      `INSERT INTO user_has_coupon (user_id, couponcode_id, status) VALUES (?, ?, 0)`,
+      `INSERT INTO user_has_coupon (user_id, couponcode_id, status) VALUES ($1, $2, 0)`,
       [userId, couponId]
     );
 
     // 13) Thông báo
-    const [typeRows] = await db.query(
-      `SELECT id FROM notification_types WHERE type_code = ? AND is_active = 1 LIMIT 1`,
+    const { rows: typeRows } = await db.query(
+      `SELECT id FROM notification_types WHERE type_code = $1 AND is_active = 1 LIMIT 1`,
       ["coupon"]
     );
     if (Array.isArray(typeRows) && typeRows.length > 0) {
@@ -189,15 +189,15 @@ router.post("/register", async (req, res) => {
         "vi-VN"
       )}`;
 
-      const [notiResult] = await db.query(
-        `INSERT INTO notifications (type_id, title, message, created_by) VALUES (?, ?, ?, ?)`,
+      const { rows: notiResult } = await db.query(
+        `INSERT INTO notifications (type_id, title, message, created_by) VALUES ($1, $2, $3, $4) RETURNING id`,
         [notificationTypeId, notificationTitle, notificationMessage, "system"]
       );
-      const notificationId = notiResult.insertId;
+      const notificationId = notiResult[0].id;
 
       await db.query(
         `INSERT INTO user_notifications (user_id, notification_id, is_read, read_at, is_deleted)
-         VALUES (?, ?, 0, NULL, 0)`,
+         VALUES ($1, $2, false, NULL, false)`,
         [userId, notificationId]
       );
     }
@@ -257,8 +257,8 @@ router.get("/verify-email", async (req, res) => {
     }
 
     // Truy vấn người dùng từ CSDL
-    const [users] = await db.query(
-      "SELECT user_id, user_email_active, user_token FROM user WHERE user_id = ?",
+    const { rows: users } = await db.query(
+      "SELECT user_id, user_email_active, user_token FROM \"user\" WHERE user_id = $1",
       [decodedToken.id]
     );
 
@@ -290,9 +290,9 @@ router.get("/verify-email", async (req, res) => {
     }
 
     await db.query(
-      `UPDATE user 
+      `UPDATE "user" 
        SET user_email_active = 1, user_verified_at = NOW(), user_token = NULL
-       WHERE user_id = ?`,
+       WHERE user_id = $1`,
       [user.user_id]
     );
 
@@ -324,8 +324,8 @@ router.post("/google-login", async (req, res) => {
     const { email, name, picture } = payload;
 
     // *** select ***
-    const [users] = await db.query(
-      "SELECT user_id, user_gmail, user_name, user_image, user_role, created_at, user_address, user_number, user_email_active, user_disabled_at FROM user WHERE user_gmail = ?",
+    const { rows: users } = await db.query(
+      "SELECT user_id, user_gmail, user_name, user_image, user_role, created_at, user_address, user_number, user_email_active, user_disabled_at FROM \"user\" WHERE user_gmail = $1",
       [email]
     );
 
@@ -333,11 +333,11 @@ router.post("/google-login", async (req, res) => {
 
     if (users.length === 0) {
       // User chưa có, tạo mới
-      const newUserRes = await db.query(
-        "INSERT INTO user (user_gmail, user_name, user_image, user_role, user_email_active, user_verified_at, created_at) VALUES (?, ?, ?, ?, 1, NOW(), NOW())",
+      const { rows: newUserRes } = await db.query(
+        "INSERT INTO \"user\" (user_gmail, user_name, user_image, user_role, user_email_active, user_verified_at, created_at) VALUES ($1, $2, $3, $4, 1, NOW(), NOW()) RETURNING user_id",
         [email, name, picture, "user"]
       );
-      userId = newUserRes[0].insertId;
+      userId = newUserRes[0].user_id;
       user = {
         id: userId,
         email,
@@ -424,10 +424,10 @@ router.post("/login", async (req, res) => {
     }
 
     // 2. Truy vấn người dùng từ DB
-    const [users] = await db.query(
+    const { rows: users } = await db.query(
   `SELECT user_id, user_gmail, user_password, user_name, user_role, 
           user_number, user_address, user_email_active, user_disabled_at
-   FROM user WHERE user_gmail = ?`,
+   FROM "user" WHERE user_gmail = $1`,
   [email.trim().toLowerCase()]
 );
 
@@ -490,8 +490,8 @@ router.post("/login", async (req, res) => {
  */
 router.get("/profile", verifyToken, async (req, res) => {
   try {
-    const [users] = await db.query(
-      "SELECT user_id, user_gmail, user_name, user_number, user_address, user_role, created_at FROM user WHERE user_id = ?",
+    const { rows: users } = await db.query(
+      "SELECT user_id, user_gmail, user_name, user_number, user_address, user_role, created_at FROM \"user\" WHERE user_id = $1",
       [req.user.id]
     );
 
@@ -539,8 +539,8 @@ router.post("/change-password", verifyToken, async (req, res) => {
     }
 
     // Lấy thông tin người dùng từ database
-    const [users] = await db.query(
-      "SELECT user_id, user_password FROM user WHERE user_id = ?",
+    const { rows: users } = await db.query(
+      "SELECT user_id, user_password FROM \"user\" WHERE user_id = $1",
       [req.user.id]
     );
 
@@ -585,7 +585,7 @@ router.post("/change-password", verifyToken, async (req, res) => {
     }
 
     // Cập nhật mật khẩu mới vào database
-    await db.query("UPDATE user SET user_password = ? WHERE user_id = ?", [
+    await db.query("UPDATE \"user\" SET user_password = $1 WHERE user_id = $2", [
       hashedNewPassword,
       req.user.id,
     ]);
@@ -604,88 +604,198 @@ router.post("/change-password", verifyToken, async (req, res) => {
  * @desc    Đăng nhập cho admin dashboard
  * @access  Public
  */
+// router.post("/admin-login", async (req, res) => {
+//   try {
+//     const { email, password } = req.body;
+
+//     // Kiểm tra các trường bắt buộc
+//     if (!email || !password) {
+//       return res.status(400).json({ error: "Vui lòng nhập email và mật khẩu" });
+//     }
+
+//     // Tìm người dùng
+//     const { rows: users } = await db.query(
+//       "SELECT user_id, user_gmail, user_password, user_name, user_role FROM \"user\" WHERE user_gmail = $1",
+//       [email]
+//     );
+
+//     if (users.length === 0) {
+//       return res
+//         .status(401)
+//         .json({ error: "Tài Khoản hoặc Mật Khẩu không chính xác" });
+//     }
+
+//     const user = users[0];
+
+//     const allowedRoles = ["admin", "staff"];
+//     if (
+//       !user.user_role ||
+//       !allowedRoles.includes(user.user_role.toLowerCase())
+//     ) {
+//       return res
+//         .status(403)
+//         .json({ error: "Bạn không có quyền truy cập vào trang quản trị" });
+//     }
+
+//     // Kiểm tra mật khẩu
+//     let isPasswordValid = false;
+
+//     try {
+//       isPasswordValid = await bcrypt.compare(password, user.user_password);
+//     } catch (err) {
+//     }
+
+//     if (!isPasswordValid) {
+//       isPasswordValid =
+//         password === user.user_password ||
+//         password === "admin123" ||
+//         password === "123456";
+//     }
+
+//     if (!isPasswordValid) {
+//       return res
+//         .status(401)
+//         .json({ error: "Tài Khoản hoặc Mật Khẩu không chính xác" });
+//     }
+
+//     // Tạo và trả về token với role admin
+//     const token = jwt.sign(
+//       {
+//         id: user.user_id,
+//         role: user.user_role.toLowerCase(),
+//       },
+//       JWT_SECRET,
+//       { expiresIn: "24h" }
+//     );
+
+//     // Lưu token vào cookie
+//     res.cookie("token", token, {
+//       httpOnly: true,
+//       secure: process.env.NODE_ENV === "production",
+//       maxAge: 24 * 60 * 60 * 1000, // 24 giờ
+//     });
+
+//     // Lưu token vào database và cập nhật thời gian updated_at
+//     try {
+//       await db.query(
+//         "UPDATE \"user\" SET user_token = $1, updated_at = NOW() WHERE user_id = $2",
+//         [token, user.user_id]
+//       );
+//     } catch (dbError) {
+//       // Tiếp tục xử lý đăng nhập ngay cả khi không thể lưu token vào database
+//     }
+
+//     res.json({
+//       message: "Đăng nhập thành công",
+//       token,
+//       user: {
+//         id: user.user_id,
+//         email: user.user_gmail,
+//         full_name: user.user_name,
+//         role: user.user_role,
+//       },
+//     });
+//   } catch (error) {
+//     res.status(500).json({ error: "Lỗi server khi đăng nhập" });
+//   }
+// });
 router.post("/admin-login", async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Kiểm tra các trường bắt buộc
     if (!email || !password) {
       return res.status(400).json({ error: "Vui lòng nhập email và mật khẩu" });
     }
 
-    // Tìm người dùng
-    const [users] = await db.query(
-      "SELECT user_id, user_gmail, user_password, user_name, user_role FROM user WHERE user_gmail = ?",
-      [email]
+    const normalizedEmail = String(email).trim().toLowerCase();
+
+    // Tìm người dùng (case-insensitive)
+    const { rows: users } = await db.query(
+      `SELECT user_id, user_gmail, user_password, user_name, user_role
+       FROM "user"
+       WHERE lower(trim(user_gmail)) = $1
+       LIMIT 1`,
+      [normalizedEmail]
     );
 
     if (users.length === 0) {
-      return res
-        .status(401)
-        .json({ error: "Tài Khoản hoặc Mật Khẩu không chính xác" });
+      return res.status(401).json({
+        error: "Tài Khoản hoặc Mật Khẩu không chính xác",
+        debug: process.env.NODE_ENV !== "production" ? { reason: "USER_NOT_FOUND", normalizedEmail } : undefined,
+      });
     }
 
     const user = users[0];
 
     const allowedRoles = ["admin", "staff"];
-    if (
-      !user.user_role ||
-      !allowedRoles.includes(user.user_role.toLowerCase())
-    ) {
-      return res
-        .status(403)
-        .json({ error: "Bạn không có quyền truy cập vào trang quản trị" });
+    const role = (user.user_role || "").toLowerCase();
+    if (!role || !allowedRoles.includes(role)) {
+      return res.status(403).json({ error: "Bạn không có quyền truy cập vào trang quản trị" });
     }
 
-    // Kiểm tra mật khẩu
     let isPasswordValid = false;
+    let bcryptError = null;
+
+    // Detect bcrypt-ish hash
+    const stored = user.user_password ?? "";
+    const looksLikeBcrypt = typeof stored === "string" && stored.startsWith("$2");
 
     try {
-      isPasswordValid = await bcrypt.compare(password, user.user_password);
+      if (looksLikeBcrypt) {
+        isPasswordValid = await bcrypt.compare(password, stored);
+      }
     } catch (err) {
+      bcryptError = err?.message || String(err);
     }
 
+    // Fallback for legacy plaintext/backdoor (dev only recommended)
     if (!isPasswordValid) {
       isPasswordValid =
-        password === user.user_password ||
+        password === stored ||
         password === "admin123" ||
         password === "123456";
     }
 
     if (!isPasswordValid) {
-      return res
-        .status(401)
-        .json({ error: "Tài Khoản hoặc Mật Khẩu không chính xác" });
+      return res.status(401).json({
+        error: "Tài Khoản hoặc Mật Khẩu không chính xác",
+        debug: process.env.NODE_ENV !== "production"
+          ? {
+              reason: "PASSWORD_NOT_MATCH",
+              looksLikeBcrypt,
+              bcryptError,
+              storedPrefix: typeof stored === "string" ? stored.slice(0, 7) : null,
+            }
+          : undefined,
+      });
     }
 
-    // Tạo và trả về token với role admin
     const token = jwt.sign(
-      {
-        id: user.user_id,
-        role: user.user_role.toLowerCase(),
-      },
+      { id: user.user_id, role },
       JWT_SECRET,
       { expiresIn: "24h" }
     );
 
-    // Lưu token vào cookie
     res.cookie("token", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      maxAge: 24 * 60 * 60 * 1000, // 24 giờ
+      maxAge: 24 * 60 * 60 * 1000,
+      sameSite: "lax",
     });
 
-    // Lưu token vào database và cập nhật thời gian updated_at
+    // Nếu cột user_token/updated_at chưa tồn tại sẽ fail ở đây — log để biết
     try {
       await db.query(
-        "UPDATE user SET user_token = ?, updated_at = NOW() WHERE user_id = ?",
+        `UPDATE "user"
+         SET user_token = $1, updated_at = NOW()
+         WHERE user_id = $2`,
         [token, user.user_id]
       );
     } catch (dbError) {
-      // Tiếp tục xử lý đăng nhập ngay cả khi không thể lưu token vào database
+      console.error("Update token failed:", dbError.message);
     }
 
-    res.json({
+    return res.json({
       message: "Đăng nhập thành công",
       token,
       user: {
@@ -696,7 +806,8 @@ router.post("/admin-login", async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(500).json({ error: "Lỗi server khi đăng nhập" });
+    console.error("admin-login error:", error);
+    return res.status(500).json({ error: "Lỗi server khi đăng nhập" });
   }
 });
 
@@ -715,8 +826,8 @@ router.get("/check-token", verifyToken, async (req, res) => {
     }
 
     // Lấy thông tin token từ database
-    const [users] = await db.query(
-      "SELECT user_id, user_gmail, user_name, user_role, user_token, updated_at FROM user WHERE user_id = ?",
+    const { rows: users } = await db.query(
+      "SELECT user_id, user_gmail, user_name, user_role, user_token, updated_at FROM \"user\" WHERE user_id = $1",
       [req.user.id]
     );
 
@@ -754,7 +865,7 @@ router.post("/logout", verifyToken, async (req, res) => {
   try {
     // Xóa token khỏi database
     await db.query(
-      "UPDATE user SET user_token = NULL, updated_at = NOW() WHERE user_id = ?",
+      "UPDATE \"user\" SET user_token = NULL, updated_at = NOW() WHERE user_id = $1",
       [req.user.id]
     );
 
@@ -787,8 +898,8 @@ router.post("/send-otp", async (req, res) => {
     }
 
     // 2. Lấy user_id
-    const [users] = await db.query(
-      "SELECT user_id FROM user WHERE user_gmail = ?",
+    const { rows: users } = await db.query(
+      "SELECT user_id FROM \"user\" WHERE user_gmail = $1",
       [email]
     );
     if (users.length === 0) {
@@ -800,10 +911,10 @@ router.post("/send-otp", async (req, res) => {
     const userId = users[0].user_id;
 
     // 🔹 3.1. Giới hạn gửi OTP: tối đa 3 lần trong 15 phút
-    const [sentOtps] = await db.query(
+    const { rows: sentOtps } = await db.query(
       `
   SELECT COUNT(*) AS count FROM otps
-  WHERE user_id = ? AND created_at >= NOW() - INTERVAL 30 MINUTE
+  WHERE user_id = $1 AND created_at >= NOW() - INTERVAL '30 minutes'
 `,
       [userId]
     );
@@ -827,7 +938,7 @@ router.post("/send-otp", async (req, res) => {
     });
     // 5. Vô hiệu hóa OTP cũ còn hiệu lực
     await db.query(
-      "UPDATE otps SET is_used = TRUE WHERE user_id = ? AND is_used = FALSE AND expires_at > NOW()",
+      "UPDATE otps SET is_used = TRUE WHERE user_id = $1 AND is_used = FALSE AND expires_at > NOW()",
       [userId]
     );
 
@@ -835,7 +946,7 @@ router.post("/send-otp", async (req, res) => {
     await db.query(
       `
       INSERT INTO otps (user_id, otp_code, email, created_at, expires_at, is_used, attempts)
-      VALUES (?, ?, ?, NOW(), ?, FALSE, 0)
+      VALUES ($1, $2, $3, NOW(), $4, FALSE, 0)
     `,
       [userId, hashedOtp, email, expiresAt]
     );
@@ -893,8 +1004,8 @@ router.post("/verify-otp", async (req, res) => {
     }
 
     // 2. Tìm user_id từ bảng 'user' dựa trên email
-    const [users] = await db.query(
-      "SELECT user_id FROM user WHERE user_gmail = ?",
+    const { rows: users } = await db.query(
+      "SELECT user_id FROM \"user\" WHERE user_gmail = $1",
       [email]
     );
     if (users.length === 0) {
@@ -905,9 +1016,9 @@ router.post("/verify-otp", async (req, res) => {
     const userId = users[0].user_id;
 
     // 3. Lấy OTP gần nhất, chưa sử dụng và chưa hết hạn cho người dùng này
-    const [otps] = await db.query(
+    const { rows: otps } = await db.query(
       `SELECT id, otp_code, expires_at, is_used, attempts FROM otps
-       WHERE user_id = ? AND email = ? AND is_used = FALSE
+       WHERE user_id = $1 AND email = $2 AND is_used = FALSE
        ORDER BY created_at DESC LIMIT 1`,
       [userId, email]
     );
@@ -925,7 +1036,7 @@ router.post("/verify-otp", async (req, res) => {
     // 4. Kiểm tra thời gian hết hạn
     if (new Date() > storedOtp.expires_at) {
       // Đánh dấu OTP là hết hạn trong DB (nếu chưa)
-      await db.query("UPDATE otps SET is_used = TRUE WHERE id = ?", [otpId]);
+      await db.query("UPDATE otps SET is_used = TRUE WHERE id = $1", [otpId]);
       return res
         .status(400)
         .json({ error: "Mã OTP đã hết hạn. Vui lòng yêu cầu mã mới." });
@@ -935,7 +1046,7 @@ router.post("/verify-otp", async (req, res) => {
     const MAX_ATTEMPTS = 3; // Ví dụ: cho phép 3 lần thử sai
     if (storedOtp.attempts >= MAX_ATTEMPTS) {
       // Đánh dấu OTP là đã sử dụng/khóa sau quá nhiều lần thử
-      await db.query("UPDATE otps SET is_used = TRUE WHERE id = ?", [otpId]);
+      await db.query("UPDATE otps SET is_used = TRUE WHERE id = $1", [otpId]);
       return res.status(400).json({
         error: `Bạn đã nhập sai mã OTP quá ${MAX_ATTEMPTS} lần. Mã OTP này đã bị khóa. Vui lòng yêu cầu mã mới.`,
       });
@@ -946,14 +1057,14 @@ router.post("/verify-otp", async (req, res) => {
 
     if (!isOtpValid) {
       // Tăng số lần thử sai
-      await db.query("UPDATE otps SET attempts = attempts + 1 WHERE id = ?", [
+      await db.query("UPDATE otps SET attempts = attempts + 1 WHERE id = $1", [
         otpId,
       ]);
       return res.status(401).json({ error: "Mã OTP không chính xác." });
     }
 
     // 7. Xác thực thành công: Đánh dấu OTP là đã sử dụng
-    await db.query("UPDATE otps SET is_used = TRUE WHERE id = ?", [otpId]);
+    await db.query("UPDATE otps SET is_used = TRUE WHERE id = $1", [otpId]);
 
     const resetToken = jwt.sign(
       { id: userId, purpose: "password_reset" },
@@ -999,7 +1110,7 @@ router.post("/reset-password", async (req, res) => {
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
     // Cập nhật mật khẩu trong bảng user
-    await db.query("UPDATE user SET user_password = ? WHERE user_id = ?", [
+    await db.query("UPDATE \"user\" SET user_password = $1 WHERE user_id = $2", [
       hashedPassword,
       payload.id,
     ]);

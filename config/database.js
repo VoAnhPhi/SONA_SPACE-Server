@@ -1,44 +1,45 @@
-// Load environment variables but use fixed configuration regardless
+// db/postgres.pool.js
 require("dotenv").config();
 
-console.log("NODE_ENV:", process.env.NODE_ENV || 'not set');
+const { Pool } = require("pg");
 
-// FIXED CONFIGURATION - Known to work from logs
-// This takes precedence over any environment variables
-const WORKING_CONFIG = {
-  host: 'fur.timefortea.io.vn',
-  user: 'thainguyen0802',
-  password: 'Cegatcn!080297',
-  database: 'furnitown',
-  port: 3306,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
+/**
+ * If you're connecting to Docker-exposed Postgres on the same machine:
+ *  host=localhost, port=5432
+ */
+const PG_CONFIG = {
+	host: process.env.PGHOST || "localhost",
+	port: Number(process.env.PGPORT || 5432),
+	user: process.env.PGUSER || "pguser",
+	password: process.env.PGPASSWORD || "pgpass",
+	database: process.env.PGDATABASE || "targetdb",
+
+	// Pool settings (tương tự mysql2)
+	max: Number(process.env.PGPOOL_MAX || 10),
+	idleTimeoutMillis: Number(process.env.PG_IDLE_TIMEOUT_MS || 30000),
+	connectionTimeoutMillis: Number(process.env.PG_CONN_TIMEOUT_MS || 10000),
 };
 
-// Log the configuration we're using
-console.log("Using fixed database config with host:", WORKING_CONFIG.host);
+console.log("Using PostgreSQL config:", {
+	host: PG_CONFIG.host,
+	port: PG_CONFIG.port,
+	user: PG_CONFIG.user,
+	database: PG_CONFIG.database,
+});
+const pool = new Pool(PG_CONFIG);
 
-const mysql = require("mysql2/promise");
-
-// Create a connection pool with the working configuration
-const pool = mysql.createPool(WORKING_CONFIG);
-
-// Test the connection
-pool.getConnection()
-  .then(connection => {
-    console.log('Database connected successfully');
-    connection.release();
-  })
-  .catch(err => {
-    console.error('Error connecting to the database:', err);
-    console.error('Connection details (without password):', { 
-      host: WORKING_CONFIG.host, 
-      user: WORKING_CONFIG.user, 
-      database: WORKING_CONFIG.database, 
-      port: WORKING_CONFIG.port 
-    });
-    // Don't exit to allow server to continue
-  });
+// Test connection
+pool.connect()
+	.then((client) => {
+		return client
+			.query("SELECT NOW() AS now;")
+			.then((res) => {
+				console.log("PostgreSQL connected successfully:", res.rows[0]);
+			})
+			.finally(() => client.release());
+	})
+	.catch((err) => {
+		console.error("Error connecting to PostgreSQL:", err.message);
+	});
 
 module.exports = pool;
