@@ -24,21 +24,21 @@ router.post("/:categoryId", async (req, res) => {
 
     const sql = `
       INSERT INTO attributes (category_id, attribute_name, value_type, unit, is_required, created_at)
-      VALUES (?, ?, ?, ?, ?, NOW())
+      VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING attribute_id
     `;
 
-    const [result] = await db.query(sql, [
+    const { rows: result } = await db.query(sql, [
       categoryId,
       attribute_name,
       value_type,
       unit || null,
-      is_required ? 1 : 0,
+      is_required ? true : false,
     ]);
 
     res.status(201).json({
       success: true,
       message: "Tạo thuộc tính thành công.",
-      attribute_id: result.insertId,
+      attribute_id: result[0].attribute_id,
     });
   } catch (err) {
     res
@@ -67,10 +67,10 @@ router.get("/:categoryId/attributes", async (req, res) => {
       FROM
           attributes
       WHERE
-          category_id = ?
+          category_id = $1
       ORDER BY attribute_name;
     `;
-    const [attributes] = await db.query(sql, [categoryId]);
+    const { rows: attributes } = await db.query(sql, [categoryId]);
 
     if (attributes.length === 0) {
       return res.status(200).json([]);
