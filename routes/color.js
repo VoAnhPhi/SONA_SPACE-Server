@@ -9,7 +9,7 @@ const { verifyToken, isAdmin } = require("../middleware/auth");
  * @access  Public
  */
 router.get("/filter", async (req, res) => {
-  const [rows] = await db.query(`
+  const { rows } = await db.query(`
       SELECT color_id, color_name, color_hex
       FROM color
       ORDER BY color_priority ASC
@@ -27,12 +27,12 @@ router.get("/by-product/:slug", async (req, res) => {
   if (!slug) return res.status(400).json({ message: "Slug is required" });
 
   try {
-    const [rows] = await db.query(
+    const { rows } = await db.query(
       `
       SELECT DISTINCT c.color_id, c.color_name, c.color_hex, c.color_slug
       FROM color c
       JOIN variant_product vp ON c.color_id = vp.color_id
-      WHERE vp.product_id = ?
+      WHERE vp.product_id = $1
     `,
       [slug]
     );
@@ -44,7 +44,7 @@ router.get("/by-product/:slug", async (req, res) => {
 
 router.get("/admin", async (req, res) => {
   try {
-    const [rows] = await db.query(`
+    const { rows } = await db.query(`
       SELECT 
         c.color_id,
         c.color_hex,
@@ -75,7 +75,7 @@ router.get("/admin/:slug", async (req, res) => {
   }
 
   try {
-    const [rows] = await db.query(
+    const { rows } = await db.query(
       `
       SELECT 
         color_id, 
@@ -88,7 +88,7 @@ router.get("/admin/:slug", async (req, res) => {
         updated_at,
         deleted_at
       FROM color
-      WHERE color_slug = ?
+      WHERE color_slug = $1
       LIMIT 1
     `,
       [slug]
@@ -114,16 +114,17 @@ router.post("/admin", async (req, res) => {
   }
 
   try {
-    const [result] = await db.query(
+    const { rows: result } = await db.query(
       `
       INSERT INTO color (color_hex, color_name, color_priority, color_slug)
-      VALUES (?, ?, ?, ?)
+      VALUES ($1, $2, $3, $4)
+      RETURNING color_id
     `,
       [color_hex, color_name, color_priority || 0, color_slug]
     );
     res.status(201).json({
       message: "Tạo màu thành công",
-      color_id: result.insertId,
+      color_id: result[0].color_id,
     });
   } catch (error) {
     res.status(500).json({ error: "Lỗi khi tạo màu" });
@@ -140,16 +141,16 @@ router.put("/admin/:id", async (req, res) => {
   }
 
   try {
-    const [result] = await db.query(
+    const result = await db.query(
       `
       UPDATE color
-      SET color_hex = ?, color_name = ?, color_priority = ?, color_slug = ?, status = ?
-      WHERE color_id = ?
+      SET color_hex = $1, color_name = $2, color_priority = $3, color_slug = $4, status = $5
+      WHERE color_id = $6
     `,
       [color_hex, color_name, color_priority, color_slug, status, colorId]
     );
 
-    if (result.affectedRows === 0) {
+    if (result.rowCount === 0) {
       return res.status(404).json({ message: "Color not found" });
     }
 
@@ -165,8 +166,8 @@ router.put("/admin/:id/toggle-status", async (req, res) => {
   }
   try {
     // Lấy trạng thái hiện tại
-    const [rows] = await db.query(
-      "SELECT status FROM color WHERE color_id = ?",
+    const { rows } = await db.query(
+      "SELECT status FROM color WHERE color_id = $1",
       [colorId]
     );
     if (rows.length === 0) {
@@ -175,7 +176,7 @@ router.put("/admin/:id/toggle-status", async (req, res) => {
     const currentStatus = rows[0].status;
     const newStatus = currentStatus === 1 ? 0 : 1;
     await db.query(
-      "UPDATE color SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE color_id = ?",
+      "UPDATE color SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE color_id = $2",
       [newStatus, colorId]
     );
     res.json({
@@ -196,14 +197,14 @@ router.delete("/admin/:id", async (req, res) => {
 
   try {
     // Kiểm tra xem màu có sản phẩm sử dụng không
-    const [products] = await db.query(
-      `SELECT COUNT(*) as count FROM variant_product WHERE color_id = ?`,
+    const { rows: products } = await db.query(
+      `SELECT COUNT(*) as count FROM variant_product WHERE color_id = $1`,
       [colorId]
     );
     if (products[0].count > 0) {
       // Nếu có sản phẩm, chuyển trạng thái sang ẩn
       await db.query(
-        `UPDATE color SET status = 0, updated_at = CURRENT_TIMESTAMP WHERE color_id = ?`,
+        `UPDATE color SET status = 0, updated_at = CURRENT_TIMESTAMP WHERE color_id = $1`,
         [colorId]
       );
       return res.json({
@@ -212,11 +213,11 @@ router.delete("/admin/:id", async (req, res) => {
       });
     }
     // Hard delete: Xóa khỏi database
-    const [result] = await db.query(`DELETE FROM color WHERE color_id = ?`, [
+    const result = await db.query(`DELETE FROM color WHERE color_id = $1`, [
       colorId,
     ]);
 
-    if (result.affectedRows === 0) {
+    if (result.rowCount === 0) {
       return res.status(404).json({ message: "Color not found" });
     }
 

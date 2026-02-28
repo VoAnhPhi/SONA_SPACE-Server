@@ -10,7 +10,7 @@ const cloudinary = require("cloudinary").v2;
  * @access  Public
  */
 router.get("/filter/", async (req, res) => {
-  const [rows] = await db.query(`
+  const { rows } = await db.query(`
     SELECT category_id, category_name, slug, category_icon
     FROM category
     WHERE category_status = 1
@@ -34,7 +34,7 @@ router.get("/", async (req, res) => {
       ORDER BY c.category_priority ASC
     `;
     try {
-      const [categories] = await db.query(sql);
+      const { rows: categories } = await db.query(sql);
       return res.json(categories);
     } catch (dbError) {
       throw new Error(`Database error: ${dbError.message}`);
@@ -61,9 +61,9 @@ router.get("/:slug", async (req, res) => {
         c.slug,
         (SELECT COUNT(*) FROM product WHERE category_id = c.category_id) as product_count
       FROM category c
-      WHERE c.slug = ?
+      WHERE c.slug = $1
     `;
-    const [category] = await db.query(sql, [slug]);
+    const { rows: category } = await db.query(sql, [slug]);
 
     if (!category || category.length === 0) {
       return res.status(404).json({ error: "Category not found" });
@@ -96,10 +96,10 @@ router.get("/:categoryId", async (req, res) => {
         unit,
         is_required
       FROM attributes
-      WHERE category_id = ?
+      WHERE category_id = $1
       ORDER BY attribute_name ASC
     `;
-    const [attributes] = await db.query(sql, [categoryId]);
+    const { rows: attributes } = await db.query(sql, [categoryId]);
 
     res.status(200).json(attributes);
   } catch (err) {
@@ -125,7 +125,7 @@ router.get("/admin/all", verifyToken, isAdmin, async (req, res) => {
       ORDER BY c.category_priority ASC
     `;
     try {
-      const [categories] = await db.query(sql);
+      const { rows: categories } = await db.query(sql);
       return res.json(categories);
     } catch (dbError) {
       throw new Error(`Database error: ${dbError.message}`);
@@ -159,8 +159,8 @@ router.post("/", verifyToken, isAdmin, async (req, res) => {
     }
 
     // Kiểm tra tên danh mục đã tồn tại chưa
-    const [existingCategories] = await db.query(
-      "SELECT category_id FROM category WHERE slug = ?",
+    const { rows: existingCategories } = await db.query(
+      "SELECT category_id FROM category WHERE slug = $1",
       [slug]
     );
 
@@ -170,7 +170,7 @@ router.post("/", verifyToken, isAdmin, async (req, res) => {
 
     // Tạo danh mục mới
     await db.query(
-      "INSERT INTO category (category_name, category_image, category_banner, category_status, category_priority, created_at, slug) VALUES (?, ?, ?, ?, ?, NOW(), ?)",
+      "INSERT INTO category (category_name, category_image, category_banner, category_status, category_priority, created_at, slug) VALUES ($1, $2, $3, $4, $5, NOW(), $6)",
       [
         name,
         image || null,
@@ -182,8 +182,8 @@ router.post("/", verifyToken, isAdmin, async (req, res) => {
     );
 
     // Lấy thông tin danh mục vừa tạo
-    const [newCategory] = await db.query(
-      "SELECT * FROM category WHERE slug = ?",
+    const { rows: newCategory } = await db.query(
+      "SELECT * FROM category WHERE slug = $1",
       [slug]
     );
 
@@ -210,8 +210,8 @@ router.put("/:slug", verifyToken, isAdmin, async (req, res) => {
     const { name, image, banner, priority, status } = req.body;
 
     // 1. Kiểm tra danh mục tồn tại
-    const [oldData] = await db.query(
-      "SELECT category_id, category_image, category_banner FROM category WHERE slug = ?",
+    const { rows: oldData } = await db.query(
+      "SELECT category_id, category_image, category_banner FROM category WHERE slug = $1",
       [slug]
     );
     if (!oldData.length) {
@@ -224,8 +224,8 @@ router.put("/:slug", verifyToken, isAdmin, async (req, res) => {
 
     // 2. Kiểm tra tên mới có trùng không
     if (name) {
-      const [duplicateName] = await db.query(
-        "SELECT category_id FROM category WHERE category_name = ? AND slug != ?",
+      const { rows: duplicateName } = await db.query(
+        "SELECT category_id FROM category WHERE category_name = $1 AND slug != $2",
         [name, slug]
       );
       if (duplicateName.length > 0) {
@@ -257,13 +257,13 @@ router.put("/:slug", verifyToken, isAdmin, async (req, res) => {
       `
       UPDATE category
       SET
-        category_name = COALESCE(?, category_name),
-        category_image = COALESCE(?, category_image),
-        category_banner = COALESCE(?, category_banner),
-        category_priority = COALESCE(?, category_priority),
-        category_status = COALESCE(?, category_status),
+        category_name = COALESCE($1, category_name),
+        category_image = COALESCE($2, category_image),
+        category_banner = COALESCE($3, category_banner),
+        category_priority = COALESCE($4, category_priority),
+        category_status = COALESCE($5, category_status),
         updated_at = NOW()
-      WHERE slug = ?
+      WHERE slug = $6
       `,
       [
         name || null,
@@ -275,8 +275,8 @@ router.put("/:slug", verifyToken, isAdmin, async (req, res) => {
       ]
     );
 
-    const [updatedCategory] = await db.query(
-      "SELECT * FROM category WHERE slug = ?",
+    const { rows: updatedCategory } = await db.query(
+      "SELECT * FROM category WHERE slug = $1",
       [slug]
     );
 
@@ -301,8 +301,8 @@ router.delete("/:slug", verifyToken, isAdmin, async (req, res) => {
 
   try {
     // Kiểm tra danh mục tồn tại
-    const [categoryData] = await db.query(
-      "SELECT category_id, category_image, category_banner FROM category WHERE slug = ?",
+    const { rows: categoryData } = await db.query(
+      "SELECT category_id, category_image, category_banner FROM category WHERE slug = $1",
       [slug]
     );
 
@@ -314,8 +314,8 @@ router.delete("/:slug", verifyToken, isAdmin, async (req, res) => {
     const { category_image, category_banner } = categoryData[0];
 
     // Kiểm tra xem danh mục có sản phẩm nào không
-    const [products] = await db.query(
-      "SELECT product_id FROM product WHERE category_id = ? ",
+    const { rows: products } = await db.query(
+      "SELECT product_id FROM product WHERE category_id = $1 ",
       [categoryId]
     );
 
@@ -343,7 +343,7 @@ router.delete("/:slug", verifyToken, isAdmin, async (req, res) => {
     deleteFromCloudinary(category_banner);
 
     // Xóa danh mục
-    await db.query("DELETE FROM category WHERE slug = ?", [slug]);
+    await db.query("DELETE FROM category WHERE slug = $1", [slug]);
 
     res.json({ message: "Category deleted successfully" });
   } catch (error) {
@@ -374,8 +374,8 @@ router.get("/:slug/products", async (req, res) => {
       req.query.sort_order?.toUpperCase() === "ASC" ? "ASC" : "DESC";
 
     // Kiểm tra danh mục
-    const [category] = await db.query(
-      "SELECT category_id, category_name FROM category WHERE slug = ?",
+    const { rows: category } = await db.query(
+      "SELECT category_id, category_name FROM category WHERE slug = $1",
       [slug]
     );
 
@@ -386,8 +386,8 @@ router.get("/:slug/products", async (req, res) => {
     const categoryId = category[0].category_id;
 
     // Đếm tổng sản phẩm
-    const [countResult] = await db.query(
-      "SELECT COUNT(*) as total FROM product WHERE category_id = ?",
+    const { rows: countResult } = await db.query(
+      "SELECT COUNT(*) as total FROM product WHERE category_id = $1",
       [categoryId]
     );
 
@@ -395,7 +395,7 @@ router.get("/:slug/products", async (req, res) => {
     const totalPages = Math.ceil(totalProducts / limit);
 
     // Query sản phẩm
-    const [products] = await db.query(
+    const { rows: products } = await db.query(
       `
        SELECT
   p.product_id AS id,
@@ -423,25 +423,22 @@ router.get("/:slug/products", async (req, res) => {
   LIMIT 1
 ) AS price_sale,
 
-  JSON_ARRAYAGG(DISTINCT col.color_hex) AS color_hex
+  COALESCE(json_agg(DISTINCT col.color_hex) FILTER (WHERE col.color_hex IS NOT NULL), '[]') AS color_hex
 
         FROM product p
         LEFT JOIN category c ON p.category_id = c.category_id
         LEFT JOIN variant_product vp ON p.product_id = vp.product_id
         LEFT JOIN color col ON vp.color_id = col.color_id
-        WHERE p.category_id = ?
-        GROUP BY p.product_id
+        WHERE p.category_id = $1
+        GROUP BY p.product_id, c.category_id, c.category_name
         ORDER BY p.${sort_by} ${sort_order}
-        LIMIT ?, ?
+        LIMIT $2 OFFSET $3
     `,
-      [categoryId, offset, limit]
+      [categoryId, limit, offset]
     );
 
     const transformedProducts = products.map((product) => {
-      let colorHex = [];
-      try {
-        colorHex = JSON.parse(product.color_hex || "[]");
-      } catch {}
+      let colorHex = product.color_hex || [];
 
       return {
         id: product.id,
@@ -483,12 +480,12 @@ router.get("/by-product/:slug", async (req, res) => {
   if (!slug) return res.status(400).json({ message: "Slug is required" });
 
   try {
-    const [rows] = await db.query(
+    const { rows } = await db.query(
       `
       SELECT c.category_id, c.category_name, c.slug
       FROM category c
       JOIN product p ON c.category_id = p.category_id
-      WHERE p.product_slug = ?
+      WHERE p.product_slug = $1
     `,
       [slug]
     );
