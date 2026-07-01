@@ -13,6 +13,10 @@ const PG_CONFIG = {
 	user: process.env.PGUSER || "pguser",
 	password: process.env.PGPASSWORD || "pgpass",
 	database: process.env.PGDATABASE || "targetdb",
+	ssl:
+		process.env.PGSSLMODE === "require"
+			? { rejectUnauthorized: false }
+			: undefined,
 
 	// Pool settings (tương tự mysql2)
 	max: Number(process.env.PGPOOL_MAX || 10),
