@@ -46,8 +46,8 @@ Result:
 
 ## 5. Out of Scope
 
-- Legacy migration script cleanup (`migrations/add-user-token-field.js`).
-- Legacy model/socket cleanup (`models/productModel.js`, `chatbotSocket*.js`).
+- Legacy migration script cleanup completed (`migrations/add-user-token-field.js`).
+- Legacy model/socket cleanup completed (`models/productModel.js`, `chatbotSocket*.js`).
 
 ## 6. Day-by-Day Checklist
 

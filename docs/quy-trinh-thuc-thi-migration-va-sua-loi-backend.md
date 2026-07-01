@@ -154,7 +154,7 @@ Buoc thuc hien:
 - `debug`
 - `chat`
 3. Don dep:
-- Loai bo file model legacy khong dung (`models/categoryModel.js`, `models/productModel.js`)
+- Da loai bo file model legacy khong dung (`models/categoryModel.js`, `models/productModel.js`, `models/chatbotPrompt.js`)
 - Cap nhat `README.md` thanh PostgreSQL-only
 
 Dieu kien hoan tat Phase 4:

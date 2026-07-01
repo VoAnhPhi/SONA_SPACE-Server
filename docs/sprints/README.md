@@ -27,8 +27,8 @@ Truoc khi lam bat ky sprint item nao, doc file chuan:
 | Sprint 13 | Catalog Materials PostgreSQL Migration | Done / Sprint 14 handoff complete | [sprint-13-catalog-materials-postgres-migration.md](./sprint-13-catalog-materials-postgres-migration.md) |
 | Sprint 14 | Notify Type PostgreSQL Migration | Done / Sprint 15 handoff complete | [sprint-14-notify-typenotify-postgres-migration.md](./sprint-14-notify-typenotify-postgres-migration.md) |
 | Sprint 15 | Dashboard Debug Chat PostgreSQL Migration | Done / Sprint 16 handoff complete | [sprint-15-dashboard-debug-chat-postgres-migration.md](./sprint-15-dashboard-debug-chat-postgres-migration.md) |
-| Sprint 16 | Regression Validation and Release Readiness | In Progress | [sprint-16-regression-validation-release-readiness.md](./sprint-16-regression-validation-release-readiness.md) |
-| Sprint 17 | Route QA/QC Full Coverage | Planned (Queue) | [sprint-17-route-qaqc-full-coverage.md](./sprint-17-route-qaqc-full-coverage.md) |
+| Sprint 16 | Regression Validation and Release Readiness | Done / Sprint 17 handoff complete | [sprint-16-regression-validation-release-readiness.md](./sprint-16-regression-validation-release-readiness.md) |
+| Sprint 17 | Route QA/QC Full Coverage | Done / closed locally on 2026-06-26 | [sprint-17-route-qaqc-full-coverage.md](./sprint-17-route-qaqc-full-coverage.md) |
 
 ## Quy uoc cap nhat
 

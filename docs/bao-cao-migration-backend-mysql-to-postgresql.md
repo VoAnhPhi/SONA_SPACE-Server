@@ -109,8 +109,9 @@ Ví dụ điển hình:
 
 ## 4.4 Legacy artifact chưa dọn
 
-- `migrations/add-user-token-field.js` vẫn dùng MySQL metadata (`TABLE_SCHEMA = DATABASE()`, `ON UPDATE CURRENT_TIMESTAMP`, `COMMENT` trong `ALTER`)
-- `models/categoryModel.js`, `models/productModel.js` còn truy vấn bảng legacy (`loai`, `san_pham`)
+- `migrations/add-user-token-field.js` đã được chuẩn hóa theo PostgreSQL và được giữ lại như một script maintenance riêng
+- `models/categoryModel.js`, `models/productModel.js`, `models/chatbotPrompt.js` đã được dọn khỏi source tree trong cleanup cuối
+- Một số compatibility routes vẫn được giữ lại có chủ đích cho dashboard/client, nhưng hiện đã gắn deprecation headers để báo hiệu bề mặt cũ
 - `README.md` vẫn ghi hỗ trợ song song MySQL/PostgreSQL, không phản ánh đúng trạng thái thực tế
 
 ## 5. Ma trận mức độ sẵn sàng migration theo module

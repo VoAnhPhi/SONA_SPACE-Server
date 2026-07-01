@@ -17,6 +17,7 @@ var logger = require("morgan");
 
 // Authentication middleware
 const authMiddleware = require("./middleware/auth");
+const { markDeprecatedRoute } = require("./middleware/deprecateRoute");
 
 // Import all route files
 var usersRouter = require("./routes/users");
@@ -152,7 +153,7 @@ app.use("/api/banners", bannersRouter);
 app.use("/api/materials", materialsRouter);
 app.use("/api/revenue", revenueRouter);
 app.use("/api/notify", NotifyRouter);
-app.use("/api/notifications", NotifyRouter);
+app.use("/api/notifications", markDeprecatedRoute("/api/notifications"), NotifyRouter);
 app.use("/api/typeNotify", typeNotifyRouter);
 app.use("/api/attribute", attributeRouter);
 app.use("/api/events", eventsRouter);

@@ -4,6 +4,7 @@ const db = require("../config/database");
 const cloudinary = require("../config/cloudinary");
 const { verifyToken, isAdmin, optionalAuth } = require("../middleware/auth");
 const { withTransaction } = require("../db/transaction");
+const { markDeprecatedRoute } = require("../middleware/deprecateRoute");
 const LIMIT_PER_PAGE = 8;
 const parseJsonArray = (value) => {
   if (Array.isArray(value)) return value;
@@ -548,7 +549,7 @@ router.get("/search", async (req, res) => {
  * @desc    Láº¥y danh sÃ¡ch sáº£n pháº©m cho quáº£n trá»‹ viÃªn
  * @access  Private (Admin only)
  **/
-router.get("/admin", verifyToken, isAdmin, async (req, res) => {
+router.get("/admin", markDeprecatedRoute("/api/products/admin"), verifyToken, isAdmin, async (req, res) => {
   try {
     const { rows: products } = await db.query(`
       SELECT 
@@ -2127,7 +2128,7 @@ router.put("/status/:id", verifyToken, isAdmin, async (req, res) => {
  * @access  Private (Admin only)
  */
 
-router.post("/add", verifyToken, isAdmin, async (req, res) => {
+router.post("/add", markDeprecatedRoute("/api/products/add"), verifyToken, isAdmin, async (req, res) => {
   try {
     const {
       name,
@@ -2406,7 +2407,7 @@ router.post("/add", verifyToken, isAdmin, async (req, res) => {
  *  @access  Private (Admin only)
  */
 
-router.put("/admin/:slug", verifyToken, isAdmin, async (req, res) => {
+router.put("/admin/:slug", markDeprecatedRoute("/api/products/admin/:slug"), verifyToken, isAdmin, async (req, res) => {
   const { slug: currentSlug } = req.params;
   const {
     name,
@@ -2728,7 +2729,7 @@ router.put("/admin/:slug", verifyToken, isAdmin, async (req, res) => {
  * @access  Private (Admin only)
  */
 
-router.get("/admin/:slug", verifyToken, isAdmin, async (req, res) => {
+router.get("/admin/:slug", markDeprecatedRoute("/api/products/admin/:slug"), verifyToken, isAdmin, async (req, res) => {
   const slug = req.params.slug;
   if (!slug) return res.status(400).json({ message: "Slug khÃ´ng há»£p lá»‡" });
 

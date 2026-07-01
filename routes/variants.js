@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require("../config/database");
 const { verifyToken, isAdmin } = require("../middleware/auth");
 const cloudinary = require("../config/cloudinary");
+const { markDeprecatedRoute } = require("../middleware/deprecateRoute");
 
 function parseId(value) {
   const parsed = Number.parseInt(value, 10);
@@ -294,7 +295,7 @@ router.post("/", verifyToken, isAdmin, async (req, res) => {
  * @desc    Tao bien the moi cho san pham
  * @access  Private (Admin only)
  */
-router.post("/:productId", verifyToken, isAdmin, async (req, res) => {
+router.post("/:productId", markDeprecatedRoute("/api/variants/:productId"), verifyToken, isAdmin, async (req, res) => {
   const productId = parseId(req.params.productId);
   const payload = normalizeVariantPayload(req.body);
 
@@ -386,7 +387,7 @@ router.post("/:productId", verifyToken, isAdmin, async (req, res) => {
  * @desc    Cap nhat thong tin bien the
  * @access  Private (Admin only)
  */
-router.put("/:variantId", verifyToken, isAdmin, async (req, res) => {
+router.put("/:variantId", markDeprecatedRoute("/api/variants/:variantId"), verifyToken, isAdmin, async (req, res) => {
   const variantId = parseId(req.params.variantId);
   const payload = normalizeVariantPayload(req.body);
 
@@ -482,7 +483,7 @@ router.put("/:variantId", verifyToken, isAdmin, async (req, res) => {
  * @desc    Xoa bien the
  * @access  Private (Admin only)
  */
-router.delete("/:variantId", verifyToken, isAdmin, async (req, res) => {
+router.delete("/:variantId", markDeprecatedRoute("/api/variants/:variantId"), verifyToken, isAdmin, async (req, res) => {
   const variantId = parseId(req.params.variantId);
 
   if (!variantId) {

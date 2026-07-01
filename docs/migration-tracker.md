@@ -24,6 +24,7 @@
 - `docs/sprints/sprint-15-dashboard-debug-chat-postgres-migration.md`
 - `docs/sprints/sprint-16-regression-validation-release-readiness.md`
 - `docs/sprints/sprint-17-route-qaqc-full-coverage.md`
+- `docs/sprints/README.md`
 - `docs/db-contract-postgres.md`
 - `docs/mysql-to-postgres-column-mapping.md`
 
@@ -166,6 +167,8 @@
 | Date | Owner | Module | Done Today | Blockers | Next Action |
 |---|---|---|---|---|---|
 | YYYY-MM-DD | TBD | TBD | - | - | - |
+| 2026-06-29 | TBD | Compatibility routes | Marked the still-required legacy API compatibility routes with deprecation headers (`/api/notifications`, legacy `products` admin/write surfaces, and legacy `variants` write surfaces) so callers keep working while the server clearly signals the old surface | No new blocker; these routes remain intentionally supported until dashboard/client callers are migrated | Migrate callers to canonical surfaces when the UI/API contract is ready, then remove the deprecated aliases |
+| 2026-06-29 | TBD | Legacy cleanup | Removed dead legacy model artifacts (`models/categoryModel.js`, `models/productModel.js`, `models/chatbotPrompt.js`) and synchronized the docs so the remaining maintenance script is no longer described as MySQL-era debt | No new blocker; the remaining `migrations/add-user-token-field.js` script is PostgreSQL-safe and intentionally retained | Keep focusing on environment validation and only remove compatibility routes if the dashboard/client no longer needs them |
 | 2026-06-26 | TBD | Sprint 17 - Day 5 Consolidation + Release Gate | Re-ran the full local gate for Sprint 17: `npm run check:mysql-patterns` returned clean, `node -e "require('./app'); console.log('APP_OK'); process.exit(0)"` returned `APP_OK`, and all reusable suites passed again with zero failures (`qa:auth-smoke` `96/96`, `qa:day2-contract` `56/56`, `qa:day3-contract` `80/80`, `qa:day4-contract` `97/97`); aggregate reusable evidence now covers `329` checks across the migrated server surface | No Critical/High blocker remains locally; `S17-B001` is closed after end-to-end route coverage | Move from local QA closeout to environment deployment validation using the existing staging deploy/rollback runbook |
 | 2026-06-26 | TBD | Sprint 17 - Day 4 Dashboard/Notify/CRM Contract Sweep | Added reusable Day 4 tooling in `scripts/qa-day4-contract.js`, fixed the last dashboard runtime regression by redirecting `GET /dashboard/orders/view/:id` to the prepared detail route, rewrote `routes/contactFormsDesign.js` to use the real PostgreSQL schema while preserving legacy payload fields through compatibility JSON, and passed `97/97` checks across `dashboard.js`, `debug.js`, `chat.js`, `notify.js`, `typenotify.js`, `upload.js`, `contactForms.js`, `contactFormsDesign.js`, and `index.js` | No new Critical/High blocker remained after the `contactFormsDesign` and dashboard compatibility fixes; only final rerun/closeout work was left | Execute Day 5 release gate reruns, close `S17-B001`, and publish the Go/No-Go QA state |
 | 2026-06-26 | TBD | Sprint 17 - Day 3 Auth/User + Social/Content Contract Sweep | Added reusable Day 3 tooling in `scripts/qa-day3-contract.js` plus `npm run qa:day3-contract`, then ran `80` contract/depth checks across `auth.js`, `users.js`, `comments.js`, `wishlists.js`, `wishlists-id.js`, `news.js`, `newsCategories.js`, `events.js`, and `banners.js`; the full suite passed on first run with zero failed checks, confirming frontend-facing compatibility payloads stay stable on PostgreSQL even when local data is sparse (`comments/news/wishlists` empty-state responses still preserve arrays, pagination, and message fields) | No new Critical/High blocker surfaced in Day 3; `S17-B001` remains open only because Day 4/Day 5 coverage is still pending | Move to Sprint 17 Day 4 and add the same reusable contract smoke coverage for `dashboard.js`, `debug.js`, `chat.js`, `notify.js`, `typenotify.js`, `upload.js`, `contactForms.js`, `contactFormsDesign.js`, and `index.js` |
@@ -218,12 +221,11 @@
 
 | ID | Date | Module | Blocker | Severity | Owner | ETA | Status |
 |---|---|---|---|---|---|---|---|
-| B-001 | YYYY-MM-DD | TBD | - | High | TBD | TBD | Open |
 | B-002 | 2026-04-06 | Multi-module | `check:mysql-patterns` blocker resolved after Sprint 15 closeout and legacy cleanup (`0` findings) | High | TBD | 5-7 days | Closed |
 | B-003 | 2026-05-01 | Commerce | Final `orders.order_status` numeric business mapping is not confirmed | High | TBD | Sprint 2 | Closed |
 | B-004 | 2026-05-01 | Payments | Legacy routes expect `payments.order_id`, but current schema links `orders.payment_id` to `payments.payment_id` | High | TBD | Sprint 2 | Closed |
 | B-005 | 2026-05-01 | Coupon | `couponcode.title`, `is_flash_sale`, and `combinations` do not exist in current PostgreSQL schema | High | TBD | Sprint 2 | Closed |
-| B-006 | 2026-05-10 | QA | Full QA/QC evidence for all route files has not been executed yet (Sprint 17 queue) | High | TBD | Sprint 17 | Open |
+| B-006 | 2026-05-10 | QA | Full QA/QC evidence for all route files was completed and rerun on the local PostgreSQL baseline during Sprint 17 closeout (`329/329` checks across Day 1-Day 4 reruns on `2026-06-26`) | High | TBD | Sprint 17 | Closed |
 | B-007 | 2026-06-25 | Route contract | Public admin/dashboard mutation exposure across `products`, `variants`, `materials`, `typenotify`, `comments`, `chat`, `attributes`, and `upload` was resolved during Sprint 16 hardening batches 1-3; remaining route-readiness work is now debug/test cleanup rather than missing auth on mutation endpoints | High | TBD | Sprint 16 | Closed |
 | B-008 | 2026-06-25 | Data reconciliation | Closed on `2026-06-25` after seeding a controlled local commerce dataset, rerunning reconciliation/integrity checks, and validating seeded commerce/revenue endpoints end-to-end on the local PostgreSQL snapshot | High | TBD | Sprint 16 | Closed |
 

@@ -31,9 +31,9 @@
 - [x] `db/transaction.js` PostgreSQL transaction helper has been added.
 - [x] README database setup is PostgreSQL-only, with MySQL marked as legacy migration source.
 - [ ] `mysql2` still exists in `package.json`.
-- [ ] Legacy migration/model files still contain MySQL patterns:
-  - `migrations/add-user-token-field.js`
-  - `models/productModel.js`
+- [x] Legacy migration/model cleanup completed:
+  - `migrations/add-user-token-field.js` is retained as a PostgreSQL-safe maintenance script
+  - `models/productModel.js` has been removed
 - [ ] `npm run check:mysql-patterns` is still failing outside the completed Auth/User slice.
 
 ## 2. Baseline Metrics
@@ -225,7 +225,7 @@ Evidence:
 | S1-B001 | Schema | `db-contract-postgres.md` and column mapping are missing | High | TBD | Closed |
 | S1-B002 | Codebase | Guard still fails with 819 MySQL findings outside completed slice | High | TBD | Open |
 | S1-B003 | Docs | README still describes MySQL as supported setup | Medium | TBD | Closed |
-| S1-B004 | Legacy | `migrations/add-user-token-field.js` and `models/productModel.js` still use MySQL contracts | Medium | TBD | Open |
+| S1-B004 | Legacy | Legacy model artifacts were removed; `migrations/add-user-token-field.js` is PostgreSQL-safe and retained as a standalone maintenance script | Medium | TBD | Closed |
 | S1-B005 | Commerce | Final `orders.order_status` numeric map and `payments` ownership relation need team confirmation | High | TBD | Open |
 
 ## 10. Notes for Daily Updates
