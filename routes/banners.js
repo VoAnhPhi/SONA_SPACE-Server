@@ -56,7 +56,7 @@ const isAdmin = (req, res, next) => {
 // GET: Lấy tất cả banner
 router.get("/", async (req, res) => {
   try {
-    const [banners] = await db.query(`
+    const { rows: banners } = await db.query(`
       SELECT 
         b.*,
         b.banner_id as id,
@@ -87,14 +87,14 @@ router.get("/page/:pageType", async (req, res) => {
   try {
     const pageType = req.params.pageType;
     
-    const [banners] = await db.query(`
+    const { rows: banners } = await db.query(`
       SELECT 
         b.*,
         b.banner_id as id,
         c.category_name
       FROM banners b
       LEFT JOIN category c ON b.category_id = c.category_id
-      WHERE b.page_type = ? AND b.is_active = 1 
+      WHERE b.page_type = $1 AND b.is_active = 1 
       ORDER BY b.position ASC, b.created_at DESC
     `, [pageType]);
     
@@ -124,9 +124,9 @@ router.post("/pages", async (req, res) => {
     }
     
     // Tạo placeholders cho câu query
-    const placeholders = pageTypes.map(() => '?').join(',');
+    const placeholders = pageTypes.map((_, i) => `$${i + 1}`).join(',');
     
-    const [banners] = await db.query(
+    const { rows: banners } = await db.query(
       `SELECT * FROM banners WHERE page_type IN (${placeholders}) AND status = 'active' ORDER BY page_type, position ASC, created_at DESC`,
       pageTypes
     );
@@ -167,9 +167,9 @@ router.get("/pages", async (req, res) => {
     }
     
     // Tạo placeholders cho câu query
-    const placeholders = pageTypes.map(() => '?').join(',');
+    const placeholders = pageTypes.map((_, i) => `$${i + 1}`).join(',');
     
-    const [banners] = await db.query(
+    const { rows: banners } = await db.query(
       `SELECT * FROM banners WHERE page_type IN (${placeholders}) AND status = 'active' ORDER BY page_type, position ASC, created_at DESC`,
       pageTypes
     );
@@ -196,7 +196,7 @@ router.get("/pages", async (req, res) => {
 // GET: Lấy danh sách tất cả các page_type có banner
 router.get("/page-types", async (req, res) => {
   try {
-    const [result] = await db.query(
+    const { rows: result } = await db.query(
       "SELECT DISTINCT page_type FROM banners WHERE status = 'active' ORDER BY page_type"
     );
     
@@ -211,7 +211,7 @@ router.get("/page-types", async (req, res) => {
 // GET: Lấy banner theo ID
 router.get("/:id", async (req, res) => {
   try {
-    const [banners] = await db.query("SELECT *, banner_id as id FROM banners WHERE banner_id = ?", [
+    const { rows: banners } = await db.query("SELECT *, banner_id as id FROM banners WHERE banner_id = $1", [
       req.params.id,
     ]);
 
@@ -250,8 +250,8 @@ router.post("/", authMiddleware.verifyToken, isAdmin, upload.single("image"), as
     // Convert status to is_active boolean
     const is_active = req.body.status === 'active' ? 1 : 0;
     
-    const [result] = await db.query(
-      "INSERT INTO banners (title, image_url, position, is_active, page_type, category_id, start_date, end_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())",
+    const { rows: result } = await db.query(
+      "INSERT INTO banners (title, image_url, position, is_active, page_type, category_id, start_date, end_date, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW()) RETURNING banner_id",
       [
         title, 
         image_url, 
@@ -265,8 +265,8 @@ router.post("/", authMiddleware.verifyToken, isAdmin, upload.single("image"), as
     );
     
     res.status(201).json({
-      id: result.insertId,
-      banner_id: result.insertId,
+      id: result[0].banner_id,
+      banner_id: result[0].banner_id,
       title,
       image_url: `/uploads/banners/${image_url}`,
       position,
@@ -289,7 +289,7 @@ router.put("/:id", authMiddleware.verifyToken, isAdmin, upload.single("image"), 
     const bannerId = req.params.id;
     
     // Kiểm tra banner có tồn tại không
-    const [existingBanners] = await db.query("SELECT * FROM banners WHERE banner_id = ?", [bannerId]);
+    const { rows: existingBanners } = await db.query("SELECT * FROM banners WHERE banner_id = $1", [bannerId]);
     
     if (existingBanners.length === 0) {
       return res.status(404).json({ error: "Banner not found" });
@@ -317,7 +317,7 @@ router.put("/:id", authMiddleware.verifyToken, isAdmin, upload.single("image"), 
     
     // Cập nhật banner trong database
     await db.query(
-      "UPDATE banners SET title = ?, image_url = ?, position = ?, is_active = ?, page_type = ?, category_id = ?, start_date = ?, end_date = ?, updated_at = NOW() WHERE banner_id = ?",
+      "UPDATE banners SET title = $1, image_url = $2, position = $3, is_active = $4, page_type = $5, category_id = $6, start_date = $7, end_date = $8, updated_at = NOW() WHERE banner_id = $9",
       [
         title || existingBanner.title,
         image_url,
@@ -332,7 +332,7 @@ router.put("/:id", authMiddleware.verifyToken, isAdmin, upload.single("image"), 
     );
     
     // Lấy dữ liệu banner sau khi cập nhật
-    const [updatedBanners] = await db.query("SELECT *, banner_id as id FROM banners WHERE banner_id = ?", [bannerId]);
+    const { rows: updatedBanners } = await db.query("SELECT *, banner_id as id FROM banners WHERE banner_id = $1", [bannerId]);
     const updatedBanner = updatedBanners[0];
     
     // Chuyển đổi đường dẫn hình ảnh thành URL đầy đủ
@@ -355,7 +355,7 @@ router.delete("/:id", authMiddleware.verifyToken, isAdmin, async (req, res) => {
     const bannerId = req.params.id;
     
     // Kiểm tra banner có tồn tại không
-    const [existingBanners] = await db.query("SELECT * FROM banners WHERE banner_id = ?", [bannerId]);
+    const { rows: existingBanners } = await db.query("SELECT * FROM banners WHERE banner_id = $1", [bannerId]);
     
     if (existingBanners.length === 0) {
       return res.status(404).json({ error: "Banner not found" });
@@ -372,7 +372,7 @@ router.delete("/:id", authMiddleware.verifyToken, isAdmin, async (req, res) => {
     }
     
     // Xóa banner từ database
-    await db.query("DELETE FROM banners WHERE banner_id = ?", [bannerId]);
+    await db.query("DELETE FROM banners WHERE banner_id = $1", [bannerId]);
     
     res.json({ message: "Banner deleted successfully" });
   } catch (error) {
@@ -386,7 +386,7 @@ router.put("/:id/toggle-status", authMiddleware.verifyToken, isAdmin, async (req
     const bannerId = req.params.id;
     
     // Kiểm tra banner có tồn tại không
-    const [existingBanners] = await db.query("SELECT * FROM banners WHERE banner_id = ?", [bannerId]);
+    const { rows: existingBanners } = await db.query("SELECT * FROM banners WHERE banner_id = $1", [bannerId]);
     
     if (existingBanners.length === 0) {
       return res.status(404).json({ error: "Banner not found" });
@@ -399,12 +399,12 @@ router.put("/:id/toggle-status", authMiddleware.verifyToken, isAdmin, async (req
     
     // Cập nhật trạng thái trong database
     await db.query(
-      "UPDATE banners SET is_active = ?, updated_at = NOW() WHERE banner_id = ?",
+      "UPDATE banners SET is_active = $1, updated_at = NOW() WHERE banner_id = $2",
       [newStatus, bannerId]
     );
     
     // Lấy dữ liệu banner sau khi cập nhật
-    const [updatedBanners] = await db.query("SELECT * FROM banners WHERE banner_id = ?", [bannerId]);
+    const { rows: updatedBanners } = await db.query("SELECT * FROM banners WHERE banner_id = $1", [bannerId]);
     const updatedBanner = updatedBanners[0];
     
     // Chuyển đổi đường dẫn hình ảnh thành URL đầy đủ
