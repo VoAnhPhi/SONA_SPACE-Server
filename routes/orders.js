@@ -448,7 +448,18 @@ router.get("/admin", verifyToken, isAdmin, async (req, res) => {
           GROUP BY order_id
         )
       ) or_latest ON o.order_id = or_latest.order_id
-      GROUP BY o.order_id, u.user_name, p.payment_method, p.payment_status, p.payment_transaction_id
+      GROUP BY
+        o.order_id,
+        u.user_name,
+        p.payment_method,
+        p.payment_status,
+        p.payment_transaction_id,
+        or_latest.return_status,
+        or_latest.return_reason,
+        or_latest.return_type,
+        or_latest.total_refund,
+        or_latest.return_created_at,
+        or_latest.return_updated_at
       ORDER BY o.created_at DESC
     `);
 
@@ -504,7 +515,7 @@ router.get("/admin", verifyToken, isAdmin, async (req, res) => {
   }
 });
 
-router.get("/count", async (req, res) => {
+router.get("/count", verifyToken, isAdmin, async (req, res) => {
   try {
     // LÃ¡ÂºÂ¥y sÃ¡Â»â€˜ lÃ†Â°Ã¡Â»Â£ng Ã„â€˜Ã†Â¡n hÃƒÂ ng theo trÃ¡ÂºÂ¡ng thÃƒÂ¡i
     const { rows: result } = await db.query(`

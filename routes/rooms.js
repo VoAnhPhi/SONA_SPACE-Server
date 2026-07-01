@@ -148,8 +148,7 @@ router.get("/:slug", async (req, res) => {
  * @desc    Tạo phòng mới
  * @access  Private (Admin only)
  */
-// verifyToken, isAdmin,
-router.post("/", async (req, res) => {
+router.post("/", verifyToken, isAdmin, async (req, res) => {
 	try {
 		const { name, description, banner, image, slug, status } = req.body;
 

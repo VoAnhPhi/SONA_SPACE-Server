@@ -75,6 +75,13 @@
   let avatarFile = null;
   let bannerFile = null;
 
+  function getAuthHeaders(extraHeaders = {}) {
+    const token = localStorage.getItem("token");
+    return token
+      ? { ...extraHeaders, Authorization: `Bearer ${token}` }
+      : extraHeaders;
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
     bindUpload("#avatarDropArea", (file) => (avatarFile = file));
     bindUpload("#bannerDropArea", (file) => (bannerFile = file));
@@ -107,6 +114,7 @@
 
     const res = await fetch("/api/upload/category", {
       method: "POST",
+      headers: getAuthHeaders(),
       body: formData,
     });
     const data = await res.json();
@@ -127,10 +135,17 @@
       saveBtn.disabled = false;
       saveBtn.innerText = "Lưu";
       return;
-      return;
     }
 
     try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        showToast("Bạn cần đăng nhập để thực hiện thao tác này", "danger");
+        saveBtn.disabled = false;
+        saveBtn.innerText = "Lưu";
+        return;
+      }
+
       const image = await uploadImage(avatarFile, "SonaSpace/Category");
       const banner = await uploadImage(bannerFile, "SonaSpace/Category", "banner");
 
@@ -145,7 +160,7 @@
 
       const res = await fetch("/api/categories", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(payload),
       });
 

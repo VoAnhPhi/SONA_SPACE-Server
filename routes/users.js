@@ -225,7 +225,7 @@ router.get("/staff", async (req, res) => {
   }
 });
 
-router.get("/admin/:id", async (req, res) => {
+router.get("/admin/:id", verifyToken, isAdmin, async (req, res) => {
   try {
     const userId = Number(req.params.id);
     if (isNaN(userId)) {
@@ -429,6 +429,7 @@ router.get("/admin/:id", async (req, res) => {
 router.put(
   "/admin/:id",
   verifyToken,
+  isAdmin,
   upload.single("image"),
   async (req, res) => {
     try {
@@ -565,7 +566,7 @@ router.put(
  * @desc    Lấy thông tin người dùng theo ID
  * @access  Private
  */
-router.get("/:id", async (req, res) => {
+router.get("/:id", verifyToken, async (req, res) => {
   try {
     const userId = Number(req.params.id);
 
@@ -734,7 +735,7 @@ router.put("/:id", verifyToken, async (req, res) => {
  * @desc    Xóa người dùng
  * @access  Private (Admin)
  */
-router.delete("/:id", isAdmin, async (req, res) => {
+router.delete("/:id", verifyToken, isAdmin, async (req, res) => {
   try {
     const userId = Number(req.params.id);
 
@@ -794,7 +795,7 @@ router.delete("/:id", isAdmin, async (req, res) => {
  * @desc    Lấy danh sách đơn hàng của người dùng
  * @access  Private
  */
-router.get("/:id/orders", async (req, res) => {
+router.get("/:id/orders", verifyToken, async (req, res) => {
   try {
     const userId = Number(req.params.id);
 
@@ -891,7 +892,7 @@ router.get("/:id/orders", async (req, res) => {
  * @desc    Lấy danh sách wishlist của người dùng
  * @access  Private
  */
-router.get("/:id/wishlist", async (req, res) => {
+router.get("/:id/wishlist", verifyToken, async (req, res) => {
   try {
     const userId = Number(req.params.id);
 
@@ -954,7 +955,7 @@ router.get("/:id/wishlist", async (req, res) => {
  * @desc    Lấy danh sách đánh giá sản phẩm của người dùng
  * @access  Private
  */
-router.get("/:id/reviews", async (req, res) => {
+router.get("/:id/reviews", verifyToken, async (req, res) => {
   try {
     const userId = Number(req.params.id);
 

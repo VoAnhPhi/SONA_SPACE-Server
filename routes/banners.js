@@ -7,6 +7,26 @@ const fs = require("fs");
 const { verifyToken, isAdmin } = require("../middleware/auth");
 
 const BANNER_UPLOAD_DIR = path.join(__dirname, "../public/uploads/banners");
+const PAGE_TYPES = [
+  "home",
+  "danh-muc",
+  "san-pham",
+  "gio-hang",
+  "thanh-toan",
+  "dat-hang-thanh-cong",
+  "khong-gian",
+  "dich-vu-thiet-ke",
+  "ho-so-kien-truc",
+  "lien-he",
+  "dang-ky",
+  "dang-nhap",
+  "quen-mat-khau",
+  "tai-khoan",
+  "chi-tiet-don-hang",
+  "dieu-khoan-su-dung",
+  "chinh-sach-bao-mat",
+  "tin-tuc",
+];
 
 function ensureUploadDir() {
   if (!fs.existsSync(BANNER_UPLOAD_DIR)) {
@@ -18,6 +38,25 @@ function toImageUrl(fileName) {
   if (!fileName) return null;
   if (String(fileName).startsWith("http")) return fileName;
   return `/uploads/banners/${path.basename(fileName)}`;
+}
+
+function normalizeStatus(status) {
+  if (status === "active" || status === 1 || status === "1" || status === true) {
+    return 1;
+  }
+  return 0;
+}
+
+function normalizePageType(pageType) {
+  const normalized = String(pageType || "home").trim().toLowerCase();
+  return PAGE_TYPES.includes(normalized) ? normalized : "home";
+}
+
+function normalizeOptionalDate(dateValue) {
+  if (dateValue === undefined || dateValue === null || dateValue === "") {
+    return null;
+  }
+  return dateValue;
 }
 
 function mapBannerRow(row) {
@@ -32,16 +71,18 @@ function mapBannerRow(row) {
     position: row.banner_priority ?? 0,
     is_active: numericStatus,
     status: numericStatus === 1 ? "active" : "inactive",
-    page_type: "home",
+    page_type: row.page_type || "home",
+    start_date: row.start_date,
+    end_date: row.end_date,
   };
 }
 
 const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
+  destination(req, file, cb) {
     ensureUploadDir();
     cb(null, BANNER_UPLOAD_DIR);
   },
-  filename: function (req, file, cb) {
+  filename(req, file, cb) {
     const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
     const ext = path.extname(file.originalname);
     cb(null, `banner-${uniqueSuffix}${ext}`);
@@ -88,18 +129,19 @@ router.get("/", async (req, res) => {
 
 router.get("/page/:pageType", async (req, res) => {
   try {
-    const pageType = String(req.params.pageType || "home").toLowerCase();
-    if (pageType !== "home") {
-      return res.json([]);
-    }
-
+    const pageType = normalizePageType(req.params.pageType);
     const { rows } = await db.query(
       `
       SELECT *
       FROM banners
-      WHERE deleted_at IS NULL AND status = 1
+      WHERE deleted_at IS NULL
+        AND status = 1
+        AND LOWER(page_type) = $1
+        AND (start_date IS NULL OR start_date <= NOW())
+        AND (end_date IS NULL OR end_date >= NOW())
       ORDER BY banner_priority ASC, created_at DESC
-      `
+      `,
+      [pageType]
     );
 
     return res.json(rows.map(mapBannerRow));
@@ -111,27 +153,38 @@ router.get("/page/:pageType", async (req, res) => {
 router.post("/pages", async (req, res) => {
   try {
     const { pageTypes } = req.body;
-
     if (!Array.isArray(pageTypes) || pageTypes.length === 0) {
       return res.status(400).json({ error: "pageTypes array is required" });
     }
 
+    const normalizedPageTypes = pageTypes.map(normalizePageType);
     const { rows } = await db.query(
       `
       SELECT *
       FROM banners
-      WHERE deleted_at IS NULL AND status = 1
+      WHERE deleted_at IS NULL
+        AND status = 1
+        AND page_type = ANY($1::text[])
+        AND (start_date IS NULL OR start_date <= NOW())
+        AND (end_date IS NULL OR end_date >= NOW())
       ORDER BY banner_priority ASC, created_at DESC
-      `
+      `,
+      [normalizedPageTypes]
     );
 
-    const mapped = rows.map(mapBannerRow);
-    const result = pageTypes.reduce((acc, pageType) => {
-      acc[pageType] = String(pageType).toLowerCase() === "home" ? mapped : [];
+    const grouped = normalizedPageTypes.reduce((acc, pageType) => {
+      acc[pageType] = [];
       return acc;
     }, {});
 
-    return res.json(result);
+    rows.map(mapBannerRow).forEach((banner) => {
+      if (!grouped[banner.page_type]) {
+        grouped[banner.page_type] = [];
+      }
+      grouped[banner.page_type].push(banner);
+    });
+
+    return res.json(grouped);
   } catch (error) {
     return res.status(500).json({ error: "Internal server error" });
   }
@@ -140,39 +193,46 @@ router.post("/pages", async (req, res) => {
 router.get("/pages", async (req, res) => {
   try {
     let { types } = req.query;
-
     if (!types) {
       return res.status(400).json({ error: "types query parameter is required" });
     }
 
     const pageTypes = Array.isArray(types) ? types : String(types).split(",");
-    if (!pageTypes.length) {
-      return res.status(400).json({ error: "At least one page type is required" });
-    }
-
+    const normalizedPageTypes = pageTypes.map(normalizePageType);
     const { rows } = await db.query(
       `
       SELECT *
       FROM banners
-      WHERE deleted_at IS NULL AND status = 1
+      WHERE deleted_at IS NULL
+        AND status = 1
+        AND page_type = ANY($1::text[])
+        AND (start_date IS NULL OR start_date <= NOW())
+        AND (end_date IS NULL OR end_date >= NOW())
       ORDER BY banner_priority ASC, created_at DESC
-      `
+      `,
+      [normalizedPageTypes]
     );
 
-    const mapped = rows.map(mapBannerRow);
-    const result = pageTypes.reduce((acc, pageType) => {
-      acc[pageType] = String(pageType).toLowerCase() === "home" ? mapped : [];
+    const grouped = normalizedPageTypes.reduce((acc, pageType) => {
+      acc[pageType] = [];
       return acc;
     }, {});
 
-    return res.json(result);
+    rows.map(mapBannerRow).forEach((banner) => {
+      if (!grouped[banner.page_type]) {
+        grouped[banner.page_type] = [];
+      }
+      grouped[banner.page_type].push(banner);
+    });
+
+    return res.json(grouped);
   } catch (error) {
     return res.status(500).json({ error: "Internal server error" });
   }
 });
 
 router.get("/page-types", async (req, res) => {
-  return res.json(["home"]);
+  return res.json(PAGE_TYPES);
 });
 
 router.get("/:id", async (req, res) => {
@@ -199,13 +259,14 @@ router.get("/:id", async (req, res) => {
 
 router.post("/", verifyToken, isAdmin, upload.single("image"), async (req, res) => {
   try {
-    const { title, subtitle, link_url, position, category_id } = req.body;
+    const { title, subtitle, link_url, position, category_id, page_type, start_date, end_date } =
+      req.body;
 
     if (!title || !req.file) {
       return res.status(400).json({ error: "Title and image are required" });
     }
 
-    const status = req.body.status === "active" ? 1 : 0;
+    const status = normalizeStatus(req.body.status);
     const { rows } = await db.query(
       `
       INSERT INTO banners (
@@ -214,13 +275,16 @@ router.post("/", verifyToken, isAdmin, upload.single("image"), async (req, res) 
         banner_image,
         banner_link,
         banner_priority,
+        page_type,
         status,
         category_id,
+        start_date,
+        end_date,
         created_at,
         updated_at,
         deleted_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW(), NULL)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW(), NULL)
       RETURNING *
       `,
       [
@@ -229,8 +293,11 @@ router.post("/", verifyToken, isAdmin, upload.single("image"), async (req, res) 
         path.basename(req.file.path),
         link_url || null,
         Number(position) || 0,
+        normalizePageType(page_type),
         status,
         category_id ? Number(category_id) : null,
+        normalizeOptionalDate(start_date),
+        normalizeOptionalDate(end_date),
       ]
     );
 
@@ -269,7 +336,8 @@ router.put("/:id", verifyToken, isAdmin, upload.single("image"), async (req, res
       nextImage = path.basename(req.file.path);
     }
 
-    const nextStatus = req.body.status === "active" ? 1 : 0;
+    const nextStatus =
+      req.body.status === undefined ? Number(existing.status) : normalizeStatus(req.body.status);
 
     await db.query(
       `
@@ -280,10 +348,13 @@ router.put("/:id", verifyToken, isAdmin, upload.single("image"), async (req, res
         banner_image = $3,
         banner_link = $4,
         banner_priority = $5,
-        status = $6,
-        category_id = $7,
+        page_type = $6,
+        status = $7,
+        category_id = $8,
+        start_date = $9,
+        end_date = $10,
         updated_at = NOW()
-      WHERE banner_id = $8
+      WHERE banner_id = $11
       `,
       [
         req.body.title || existing.banner_title,
@@ -291,18 +362,26 @@ router.put("/:id", verifyToken, isAdmin, upload.single("image"), async (req, res
         nextImage,
         req.body.link_url !== undefined ? req.body.link_url : existing.banner_link,
         req.body.position !== undefined ? Number(req.body.position) : existing.banner_priority,
+        req.body.page_type !== undefined
+          ? normalizePageType(req.body.page_type)
+          : existing.page_type,
         nextStatus,
         req.body.category_id !== undefined && req.body.category_id !== ""
           ? Number(req.body.category_id)
           : existing.category_id,
+        req.body.start_date !== undefined
+          ? normalizeOptionalDate(req.body.start_date)
+          : existing.start_date,
+        req.body.end_date !== undefined
+          ? normalizeOptionalDate(req.body.end_date)
+          : existing.end_date,
         bannerId,
       ]
     );
 
-    const { rows: updatedRows } = await db.query(
-      "SELECT * FROM banners WHERE banner_id = $1",
-      [bannerId]
-    );
+    const { rows: updatedRows } = await db.query("SELECT * FROM banners WHERE banner_id = $1", [
+      bannerId,
+    ]);
 
     return res.json(mapBannerRow(updatedRows[0]));
   } catch (error) {
@@ -360,15 +439,14 @@ router.put("/:id/toggle-status", verifyToken, isAdmin, async (req, res) => {
     const existing = existingRows[0];
     const newStatus = Number(existing.status) === 1 ? 0 : 1;
 
-    await db.query(
-      "UPDATE banners SET status = $1, updated_at = NOW() WHERE banner_id = $2",
-      [newStatus, bannerId]
-    );
+    await db.query("UPDATE banners SET status = $1, updated_at = NOW() WHERE banner_id = $2", [
+      newStatus,
+      bannerId,
+    ]);
 
-    const { rows: updatedRows } = await db.query(
-      "SELECT * FROM banners WHERE banner_id = $1",
-      [bannerId]
-    );
+    const { rows: updatedRows } = await db.query("SELECT * FROM banners WHERE banner_id = $1", [
+      bannerId,
+    ]);
 
     return res.json({
       message: `Banner ${newStatus === 1 ? "da duoc hien thi" : "da duoc an"}`,

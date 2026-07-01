@@ -19,7 +19,6 @@ var logger = require("morgan");
 const authMiddleware = require("./middleware/auth");
 
 // Import all route files
-var indexRouter = require("./routes/index");
 var usersRouter = require("./routes/users");
 var productsRouter = require("./routes/products");
 var categoriesRouter = require("./routes/categories");
@@ -73,16 +72,6 @@ app.use(express.urlencoded({ extended: false, limit: "20mb" }));
 app.use(cookieParser());
 // Serve static files
 app.use(express.static(path.join(__dirname, "public")));
-
-// Test route for categories
-app.get("/test-categories", (req, res) => {
-  res.sendFile(path.join(__dirname, "test-categories.html"));
-});
-
-// Test route for Gemini chatbot
-app.get("/test-gemini-chatbot", (req, res) => {
-  res.sendFile(path.join(__dirname, "test-gemini-chatbot.html"));
-});
 
 app.use(cors());
 

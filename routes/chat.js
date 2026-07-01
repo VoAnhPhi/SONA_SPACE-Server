@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const db = require("../config/database");
+const { verifyToken, isAdmin } = require("../middleware/auth");
 
 const DEFAULT_CONTEXT =
   "Ban la tro ly AI than thien, tra loi ngan gon va huu ich cho khach truy cap website.";
@@ -22,7 +23,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.put("/context", async (req, res) => {
+router.put("/context", verifyToken, isAdmin, async (req, res) => {
   try {
     const { context } = req.body;
     if (!context || !String(context).trim()) {

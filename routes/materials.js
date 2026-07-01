@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const db = require("../config/database");
+const { verifyToken, isAdmin } = require("../middleware/auth");
 
 function materialStatusFromDeletedAt(deletedAt) {
   return deletedAt ? 0 : 1;
@@ -77,7 +78,7 @@ router.get("/:slug", async (req, res) => {
 });
 
 // POST them moi vat lieu
-router.post("/", async (req, res) => {
+router.post("/", verifyToken, isAdmin, async (req, res) => {
   const {
     material_name,
     material_description = null,
@@ -128,7 +129,7 @@ router.post("/", async (req, res) => {
 });
 
 // PUT cap nhat vat lieu
-router.put("/:slug", async (req, res) => {
+router.put("/:slug", verifyToken, isAdmin, async (req, res) => {
   const oldSlug = req.params.slug;
   const {
     material_name,
@@ -207,7 +208,7 @@ router.put("/:slug", async (req, res) => {
 });
 
 // PUT toggle status (an/hien) vat lieu
-router.put("/:slug/toggle-status", async (req, res) => {
+router.put("/:slug/toggle-status", verifyToken, isAdmin, async (req, res) => {
   const { slug } = req.params;
   if (!slug) {
     return res.status(400).json({ success: false, message: "Slug la bat buoc." });
@@ -251,7 +252,7 @@ router.put("/:slug/toggle-status", async (req, res) => {
 });
 
 // DELETE vat lieu
-router.delete("/:slug", async (req, res) => {
+router.delete("/:slug", verifyToken, isAdmin, async (req, res) => {
   const { slug } = req.params;
 
   try {

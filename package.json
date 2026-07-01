@@ -9,7 +9,11 @@
 		"debug": "DEBUG=furnitown-api:* nodemon -L ./bin/www",
 		"start-pm2": "pm2 start ecosystem.config.js --env production",
 		"start-direct": "NODE_ENV=production node ./bin/www",
-		"check:mysql-patterns": "node ./scripts/check-mysql-patterns.js"
+		"check:mysql-patterns": "node ./scripts/check-mysql-patterns.js",
+		"qa:auth-smoke": "node ./scripts/qa-auth-smoke.js",
+		"qa:day2-contract": "node ./scripts/qa-day2-contract.js",
+		"qa:day3-contract": "node ./scripts/qa-day3-contract.js",
+		"qa:day4-contract": "node ./scripts/qa-day4-contract.js"
 	},
 	"dependencies": {
 		"@google/genai": "^1.15.0",

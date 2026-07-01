@@ -1,407 +1,419 @@
 # SONA SPACE - Server
 
-Backend API cho nền tảng thương mại điện tử nội thất SONA SPACE. Được xây dựng dengan **Node.js/Express**, **PostgreSQL**, **Socket.io** cho real-time communication.
+Backend API cho nền tảng thương mại điện tử nội thất SONA SPACE. Dự án được xây dựng bằng **Node.js/Express**, **PostgreSQL**, **Socket.IO** và đồng thời render luôn phần admin/dashboard bằng **EJS**.
 
 ---
 
-## 📋 Mục lục
+## Mục lục
 
-- [Mô tả](#-mô-tả)
-- [Yêu cầu hệ thống](#-yêu-cầu-hệ-thống)
-- [Cài đặt](#-cài-đặt)
-- [Chạy dự án](#-chạy-dự-án)
-- [Cấu trúc thư mục](#-cấu-trúc-thư-mục)
-- [API Endpoints](#-api-endpoints)
-- [Docker](#-docker)
-- [Troubleshooting](#-troubleshooting)
-
----
-
-## 📖 Mô tả
-
-Server cung cấp API đầy đủ cho ứng dụng SONA SPACE với các tính năng:
-
-**Người dùng:**
-- Xác thực & quản lý tài khoản
-- Duyệt sản phẩm, danh mục, theo bộ lọc
-- Quản lý giỏ hàng, đặt hàng, lịch sử mua
-- Chat real-time với AI chatbot (Gemini, OpenAI)
-- Quản lý wishlist
-- Nhận thông báo hệ thống
-
-**Admin:**
-- Quản lý sản phẩm & danh mục
-- Quản lý đơn hàng & trạng thái
-- Quản lý người dùng
-- Thống kê doanh thu
-- Gửi thông báo hệ thống
-- Quản lý coupon/voucher
+- [Mô tả](#mô-tả)
+- [Yêu cầu hệ thống](#yêu-cầu-hệ-thống)
+- [Cài đặt](#cài-đặt)
+- [Chạy dự án](#chạy-dự-án)
+- [Cấu trúc thư mục](#cấu-trúc-thư-mục)
+- [API endpoints](#api-endpoints)
+- [Docker](#docker)
+- [Troubleshooting](#troubleshooting)
+- [Công nghệ sử dụng](#công-nghệ-sử-dụng)
+- [Lệnh hữu ích](#lệnh-hữu-ích)
 
 ---
 
-## 💻 Yêu cầu hệ thống
+## Mô tả
 
-- **Node.js** v16+ (khuyến nghị v18+)
-- **npm** v8+ hoặc **yarn**
-- **PostgreSQL** v12+ (khuyến nghị v16 khi chạy bằng Docker Compose)
+Server cung cấp API và dashboard quản trị cho SONA SPACE với các nhóm tính năng chính:
+
+**Người dùng**
+- Xác thực và quản lý tài khoản
+- Duyệt sản phẩm, danh mục, không gian, tin tức
+- Giỏ hàng, thanh toán, đơn hàng
+- Wishlist
+- Form liên hệ và form thiết kế
+- Chat realtime với AI chatbot
+
+**Admin**
+- Quản lý sản phẩm, danh mục, banner, tin tức, sự kiện
+- Quản lý đơn hàng, người dùng, coupon, thông báo
+- Theo dõi doanh thu và dashboard vận hành
+
+---
+
+## Yêu cầu hệ thống
+
+- **Node.js** v18+ khuyến nghị
+- **npm** v8+ hoặc mới hơn
+- **Docker Desktop**
+- **Docker Compose**
 - **Git**
 
-### Tuỳ chọn:
-- **Docker** & **Docker Compose** (khuyến nghị)
-- **PM2** (quản lý process)
+### Ghi chú
+
+- Runtime backend hiện chuẩn hóa trên **PostgreSQL**
+- File dump gốc tham chiếu là `db/furnitown.sql`
+- File dùng để bootstrap DB local là `db/init/init.sql`
 
 ---
 
-## 🛠️ Cài đặt
+## Cài đặt
 
-### Bước 1: Clone dự án
+### Bước 1: vào thư mục server
 
 ```bash
-git clone <repository-url>
 cd Sona/SONA_SPACE-Server
 ```
 
-### Bước 2: Cài đặt dependencies
+### Bước 2: cài dependencies
 
 ```bash
 npm install
 ```
 
-### Bước 3: Cấu hình Database
+### Bước 3: kiểm tra file môi trường
 
-#### Tùy chọn A: Sử dụng Docker Compose (khuyến nghị)
+Server local dùng:
 
-```bash
-# Chạy PostgreSQL
-docker-compose -f docker-compose.dev.yml up -d
+- `.env` cho backend local
+- `.env.db` cho PostgreSQL chạy bằng Docker
 
-# ⚠️ Nếu bạn muốn reset DB
-docker-compose -f docker-compose.dev.yml down -v
-docker-compose -f docker-compose.dev.yml up -d
+Cấu hình local hiện tại cần đồng nhất:
 
-# Database sẽ khởi động tự động
+```env
+PGHOST=localhost
+PGPORT=5432
+PGUSER=postgres
+PGPASSWORD=postgres123
+PGDATABASE=furnitown
+PORT=3501
 ```
 
-#### Tùy chọn B: Cài đặt cục bộ
+### Bước 4: khởi động database local
 
-**PostgreSQL:**
+Flow local được chuẩn hóa như sau:
+
+- PostgreSQL chạy bằng Docker
+- backend chạy local bằng `npm run dev`
+
+Khởi động DB:
+
 ```bash
-createuser postgres --superuser
-createdb furnitown
-psql -U postgres -d furnitown -f db/init/init.sql
+docker compose up -d
 ```
 
-MySQL hiện chỉ còn là legacy migration source. Runtime backend và `db/init/init.sql` dùng PostgreSQL.
-
-### Bước 4: Cấu hình biến môi trường
-
-Tạo file `.env` trong thư mục gốc server (copy từ `.env.example` nếu có hoặc tạo thủ công).
-
-## 🚀 Chạy dự án
-
-### Chế độ Development
+### Bước 5: chạy backend
 
 ```bash
 npm run dev
 ```
 
-Server khởi động tại: **http://localhost:3501**
+Server khởi động tại:
 
-### Chế độ Production
+```text
+http://localhost:3501
+```
+
+---
+
+## Chạy dự án
+
+### Development
+
+1. Bật PostgreSQL:
+
+```bash
+docker compose up -d
+```
+
+2. Chạy backend:
+
+```bash
+npm run dev
+```
+
+### Production-like local run
 
 ```bash
 npm start
 ```
 
-### Debug Mode
+### Debug mode
 
 ```bash
 npm run debug
 ```
 
-Mở DevTools tại: **chrome://inspect**
+---
 
-## 📁 Cấu trúc thư mục
+## Cấu trúc thư mục
 
-```
+```text
 SONA_SPACE-Server/
 ├── bin/
-│   └── www                          # Server entry point
+│   └── www                          # Entry point HTTP server + Socket.IO
 ├── config/
-│   ├── cloudinary.js                # Cấu hình Cloudinary (upload ảnh)
-│   └── database.js                  # Cấu hình kết nối database
+│   ├── cloudinary.js                # Cấu hình Cloudinary
+│   └── database.js                  # Kết nối PostgreSQL
 ├── db/
-│   └── init/
-│       └── init.sql                 # Script khởi tạo database
+│   ├── furnitown.sql                # Dump gốc tham chiếu
+│   ├── init/
+│   │   └── init.sql                 # Bootstrap schema + seed local
+│   └── transaction.js               # Helper transaction
 ├── middleware/
 │   ├── auth.js                      # JWT authentication
-│   └── upload.js                    # File upload middleware
+│   └── upload.js                    # Upload middleware
 ├── models/
-│   ├── categoryModel.js
-│   ├── productModel.js
-│   └── chatbotPrompt.js
-├── routes/
-│   ├── auth.js                      # Đăng ký, đăng nhập
-│   ├── products.js                  # Quản lý sản phẩm
-│   ├── categories.js                # Danh mục sản phẩm
-│   ├── orders.js                    # Quản lý đơn hàng
-│   ├── users.js                     # Quản lý người dùng
-│   ├── chat.js                      # Chat dengan AI
-│   ├── payments.js                  # Thanh toán
-│   ├── wishlists.js                 # Danh sách yêu thích
-│   ├── comments.js                  # Bình luận sản phẩm
-│   ├── banners.js                   # Quản lý banner
-│   ├── news.js                      # Quản lý tin tức
-│   ├── dashboard.js                 # Thống kê admin
-│   └── ...                          # Các route khác
-├── services/
-│   ├── mailService.js               # Gửi email
-│   ├── mailOtp.js                   # OTP email
-│   ├── apiService.js                # Call API bên ngoài
-│   └── ...
-├── template/
-│   ├── emailVerification.ejs         # Template xác thực email
-│   ├── otpEmail.ejs                 # Template OTP
-│   ├── order.ejs                    # Template đơn hàng
-│   └── ...                          # Email templates khác
-├── views/
-│   ├── dashboard/                   # Dashboard admin views
-│   ├── layouts/                     # Layout EJS
-│   └── ...
-├── public/                          # Static files (CSS, JS, uploads)
+├── public/
 │   ├── uploads/
 │   ├── fonts/
 │   ├── images/
 │   ├── javascripts/
 │   ├── scss/
 │   └── stylesheets/
-├── app.js                           # Express configuration
+├── routes/
+│   ├── auth.js
+│   ├── products.js
+│   ├── categories.js
+│   ├── orders.js
+│   ├── users.js
+│   ├── chat.js
+│   ├── payments.js
+│   ├── wishlists.js
+│   ├── comments.js
+│   ├── banners.js
+│   ├── news.js
+│   ├── dashboard.js
+│   └── ...
+├── services/
+├── template/
+├── views/
+│   ├── dashboard/
+│   ├── layouts/
+│   └── ...
+├── app.js                           # Express app config
 ├── package.json
-├── nodemon.json                     # Nodemon settings
-├── docker-compose.dev.yml
-├── docker-compose.prod.yml
+├── docker-compose.yml               # Compose mặc định cho local DB
+├── docker-compose.dev.yml           # Cấu hình cũ / tham chiếu
+├── docker-compose.prod.yml          # Cấu hình production / tham chiếu
 └── Dockerfile.dev
 ```
 
 ---
 
-## 🔗 API Endpoints
+## API Endpoints
 
-### 🔐 Authentication
-- `POST /api/auth/register` - Đăng ký tài khoản
-- `POST /api/auth/login` - Đăng nhập
-- `POST /api/auth/logout` - Đăng xuất
-- `POST /api/auth/refresh` - Làm mới token
-- `POST /api/auth/forgot-password` - Quên mật khẩu
-- `POST /api/auth/verify-email` - Xác thực email
+### Authentication
 
-### 📦 Products
-- `GET /api/products` - Lấy danh sách sản phẩm (có pagination, filter)
-- `GET /api/products/:id` - Lấy chi tiết sản phẩm
-- `POST /api/products` - Tạo sản phẩm (admin)
-- `PUT /api/products/:id` - Cập nhật sản phẩm (admin)
-- `DELETE /api/products/:id` - Xóa sản phẩm (admin)
-- `GET /api/products/:id/comments` - Lấy bình luận
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `POST /api/auth/logout`
+- `POST /api/auth/refresh`
+- `POST /api/auth/forgot-password`
+- `POST /api/auth/verify-email`
 
-### 🏷️ Categories
-- `GET /api/categories` - Lấy danh sách danh mục
-- `POST /api/categories` - Tạo danh mục (admin)
-- `PUT /api/categories/:id` - Cập nhật danh mục (admin)
-- `DELETE /api/categories/:id` - Xóa danh mục (admin)
+### Products
 
-### 🛒 Orders
-- `GET /api/orders` - Lấy đơn hàng của user
-- `POST /api/orders` - Tạo đơn hàng
-- `GET /api/orders/:id` - Lấy chi tiết đơn hàng
-- `PUT /api/orders/:id/status` - Cập nhật trạng thái (admin)
-- `GET /api/orders/:id/invoices` - Xuất hóa đơn
+- `GET /api/products`
+- `GET /api/products/:id`
+- `POST /api/products`
+- `PUT /api/products/:id`
+- `DELETE /api/products/:id`
 
-### 👤 Users
-- `GET /api/users/profile` - Lấy thông tin cá nhân
-- `PUT /api/users/profile` - Cập nhật thông tin
-- `GET /api/users` - Lấy danh sách user (admin)
-- `PUT /api/users/:id/role` - Thay đổi quyền (admin)
+### Categories
 
-### 💬 Chat
-- `POST /api/chat/messages` - Gửi tin nhắn hỏi đáp
-- `GET /api/chat/history` - Lấy lịch sử chat
+- `GET /api/categories`
+- `GET /api/categories/:slug`
+- `POST /api/categories`
+- `PUT /api/categories/:slug`
+- `DELETE /api/categories/:slug`
 
-### 💝 Wishlist
-- `GET /api/wishlists` - Lấy danh sách yêu thích
-- `POST /api/wishlists` - Thêm vào wishlist
-- `DELETE /api/wishlists/:id` - Xóa khỏi wishlist
+### Orders
 
-### 💳 Payments
-- `POST /api/payments/create` - Tạo thanh toán
-- `POST /api/payments/verify` - Xác thực thanh toán
-- `GET /api/payments/:id/status` - Kiểm tra trạng thái
+- `GET /api/orders`
+- `POST /api/orders`
+- `GET /api/orders/:id`
+- `PUT /api/orders/:id/status`
 
-### 📊 Dashboard (Admin)
-- `GET /api/dashboard/revenue` - Doanh thu
-- `GET /api/dashboard/orders-stats` - Thống kê đơn hàng
-- `GET /api/dashboard/users-stats` - Thống kê người dùng
+### Users
 
----
+- `GET /api/users/profile`
+- `PUT /api/users/profile`
+- `GET /api/users`
+- `PUT /api/users/:id/role`
 
-## 🐳 Docker
+### Chat
 
-### Build & Run với Docker Compose (Development)
+- `POST /api/chat/messages`
+- `GET /api/chat/history`
 
-```bash
-docker-compose -f docker-compose.dev.yml up -d
-```
+### Wishlist
 
-### Build & Run với Docker Compose (Production)
+- `GET /api/wishlists`
+- `POST /api/wishlists`
+- `DELETE /api/wishlists/:id`
 
-```bash
-docker-compose -f docker-compose.prod.yml up -d
-```
+### Payments
 
-### Build Docker Image
+- `POST /api/payments/create`
+- `POST /api/payments/verify`
+- `GET /api/payments/:id/status`
 
-```bash
-docker build -f Dockerfile.dev -t sona-space-server:dev .
-```
+### Dashboard / Admin
 
-### Kiểm tra Logs
-
-```bash
-docker-compose logs -f app
-```
-
-### Stop Containers
-
-```bash
-docker-compose down
-```
+- `GET /api/dashboard/revenue`
+- `GET /api/dashboard/orders-stats`
+- `GET /api/dashboard/users-stats`
 
 ---
 
-## 🔧 Troubleshooting
+## Docker
 
-### Lỗi kết nối Database
+### Flow local hiện tại
 
-**Lỗi:** `ECONNREFUSED 127.0.0.1:5432`
+Compose mặc định chỉ phục vụ **PostgreSQL local**.
 
-**Giải pháp:**
-1. Kiểm tra PostgreSQL đang chạy: `pg_isready -h localhost`
-2. Kiểm tra cấu hình database trong `.env`
-3. Nếu dùng Docker, chạy: `docker-compose -f docker-compose.dev.yml up -d`
-4. Kiểm tra credentials trong `config/database.js`
+Khởi động DB:
 
-### Lỗi CORS
-
-**Lỗi:** `CORS policy: Access to XMLHttpRequest blocked`
-
-**Giải pháp:**
-- Kiểm tra CORS configuration trong `app.js`
-- Đảm bảo frontend URL được thêm vào whitelist
-
-### Port đã bị chiếm
-
-**Lỗi:** `EADDRINUSE: address already in use :::3501`
-
-**Giải pháp:**
 ```bash
-# Windows
+docker compose up -d
+```
+
+Dừng DB:
+
+```bash
+docker compose down
+```
+
+### Khi nào cần reset dữ liệu seed
+
+`db/init/init.sql` chỉ được Docker Postgres chạy khi volume còn trống.
+
+Nếu bạn đã sửa seed mà không thấy thay đổi, cần xóa volume:
+
+```bash
+docker compose down -v
+docker compose up -d
+```
+
+### Lưu ý quan trọng
+
+- `docker compose down` **không xóa dữ liệu**
+- `docker compose down -v` **xóa toàn bộ volume DB**
+- `db/furnitown.sql` là file gốc tham chiếu để đối chiếu dữ liệu
+- `db/init/init.sql` là file dùng để bootstrap local DB mới
+
+---
+
+## Troubleshooting
+
+### Lỗi kết nối database
+
+Lỗi thường gặp:
+
+```text
+ECONNREFUSED 127.0.0.1:5432
+```
+
+Kiểm tra:
+
+```bash
+docker compose ps
+docker compose logs postgres
+```
+
+Đồng thời xác nhận `.env` backend trùng với `.env.db`.
+
+### Sửa `init.sql` nhưng dữ liệu không đổi
+
+Nguyên nhân:
+
+- volume PostgreSQL cũ vẫn còn
+
+Cách xử lý:
+
+```bash
+docker compose down -v
+docker compose up -d
+```
+
+### Port `3501` đã bị chiếm
+
+Windows:
+
+```bash
 netstat -ano | findstr :3501
 taskkill /PID <PID> /F
-
-# macOS/Linux
-lsof -i :3501
-kill -9 <PID>
 ```
 
-### Module not found
+### App boot được nhưng query fail
 
-**Giải pháp:**
+Kiểm tra:
+
+- DB đã lên chưa
+- thông số trong `.env`
+- seed có khớp schema hiện tại không
+
+### Ảnh seed hiển thị sai
+
+Ưu tiên kiểm tra:
+
+- URL trong `db/init/init.sql`
+- file gốc tham chiếu trong `db/furnitown.sql`
+- route mapping ở `routes/categories.js` và `routes/banners.js`
+
+---
+
+## Công nghệ sử dụng
+
+- **Express.js**
+- **Node.js**
+- **PostgreSQL**
+- **JWT**
+- **Socket.IO**
+- **Nodemailer**
+- **Cloudinary**
+- **Multer**
+- **Google AI SDK**
+- **OpenAI**
+- **EJS**
+
+---
+
+## Lệnh hữu ích
+
+### Chạy backend dev
+
 ```bash
-rm -rf node_modules package-lock.json
-npm install
 npm run dev
 ```
 
-### Nodemailer không gửi được email
+### Chạy backend production-like
 
-**Giải pháp:**
-1. Kiểm tra cấu hình email trong `services/mailService.js`
-2. Kiểm tra credentials trong `.env`
-3. Cho phép "Less secure apps" nếu dùng Gmail
-4. Kiểm tra logs để xem lỗi chi tiết
+```bash
+npm start
+```
 
-## 📚 Công nghệ sử dụng
+### Kiểm tra MySQL pattern còn sót
 
-- **Express.js** - Framework web
-- **Node.js** - Runtime environment
-- **PostgreSQL** - Database
-- **JWT** - Token-based authentication
-- **Socket.io** - Real-time bidirectional communication
-- **Nodemailer** - Email service
-- **Cloudinary** - Image hosting & CDN
-- **Multer** - File upload handler
-- **Google AI SDK** - Gemini chatbot
-- **OpenAI** - Alternative AI chatbot
-- **EJS** - Template engine
-- **Helmet** - Security middleware
-- **CORS** - Cross-origin resource sharing
-- **Rate Limiter** - API rate limiting
+```bash
+npm run check:mysql-patterns
+```
+
+### Smoke test app boot
+
+```bash
+node -e "require('./app'); console.log('APP_OK'); process.exit(0)"
+```
+
+### Reset DB local từ seed
+
+```bash
+docker compose down -v
+docker compose up -d
+```
 
 ---
 
-## 📖 Lệnh hữu ích
+## Ghi chú cuối
 
-### Chạy Database Migrations
-
-```bash
-node migrations/add-user-token-field.js
-```
-
-### Kiểm tra Lỗi ESLint
-
-```bash
-npm run lint
-```
-
-### Chạy Tests (nếu có)
-
-```bash
-npm test
-```
-
-### Xem Logs Real-time
-
-```bash
-npm run dev 2>&1 | tee server.log
-```
-
-## 🤝 Đóng góp
-
-Để đóng góp vào dự án:
-
-1. Fork repository
-2. Tạo branch feature: `git checkout -b feature/YourFeature`
-3. Commit changes: `git commit -m 'Add YourFeature'`
-4. Push to branch: `git push origin feature/YourFeature`
-5. Mở Pull Request
-
----
-
-## 📝 License
-
-Dự án này được cấp phép dưới MIT License.
-
----
-
-## 📧 Liên hệ & Hỗ trợ
-
-Nếu bạn gặp vấn đề:
-
-1. Kiểm tra lại cấu hình database
-2. Xóa `node_modules` và chạy `npm install` lại
-3. Kiểm tra logs trong terminal
-4. Tạo issue trên GitHub repository
-5. Liên hệ team support
-
----
-
-**Happy Coding! 🚀**
+- Nếu task liên quan dữ liệu seed, luôn đối chiếu với `db/furnitown.sql`
+- Nếu task liên quan route/backend schema, kiểm tra thêm `routes/*.js` và `db/init/init.sql`
+- Nếu seed có thay đổi, nhớ reset volume để Docker nạp lại dữ liệu mới

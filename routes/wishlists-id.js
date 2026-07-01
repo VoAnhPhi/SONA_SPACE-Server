@@ -3,15 +3,6 @@ const router = express.Router();
 const db = require("../config/database");
 
 /**
- * @route   GET /api/wishlists-id/test
- * @desc    Test route to check if the router is working
- * @access  Public
- */
-router.get("/test", (req, res) => {
-  res.json({ message: "Wishlists ID router is working!" });
-});
-
-/**
  * @route   GET /api/wishlists-id/:userId
  * @desc    Lay danh sach wishlist cua user theo user_id (Public API)
  * @access  Public

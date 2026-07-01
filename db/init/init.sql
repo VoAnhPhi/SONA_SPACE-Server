@@ -63,6 +63,7 @@ CREATE TABLE category (
     category_description TEXT,
     slug VARCHAR(255) UNIQUE,
     category_image VARCHAR(255),
+    category_banner VARCHAR(255),
     status SMALLINT DEFAULT 1,
     category_priority SMALLINT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -110,8 +111,11 @@ CREATE TABLE banners (
     banner_image VARCHAR(255),
     banner_link VARCHAR(255),
     banner_priority INTEGER DEFAULT 0,
+    page_type VARCHAR(100) NOT NULL DEFAULT 'home',
     status SMALLINT DEFAULT 1,
     category_id INTEGER REFERENCES category(category_id),
+    start_date TIMESTAMP,
+    end_date TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP
@@ -531,16 +535,25 @@ CREATE TRIGGER update_wishlist_updated_at BEFORE UPDATE ON wishlist FOR EACH ROW
 -- ============================================================
 
 -- Categories
-INSERT INTO category (category_id, category_name, category_description, slug, category_image, status, category_priority) VALUES
-(1, 'Bàn', 'Các loại bàn nội thất', 'ban', 'https://res.cloudinary.com/dmgrdgvcf/image/upload/v1749716774/table_hcnvul.webp', 1, 1),
-(2, 'Ghế', 'Các loại ghế ngồi', 'ghe', 'https://res.cloudinary.com/dmgrdgvcf/image/upload/v1749716774/chair_etwwne.webp', 1, 2),
-(3, 'Tủ', 'Các loại tủ lưu trữ', 'tu', 'https://res.cloudinary.com/dmgrdgvcf/image/upload/v1749716775/storage_q2y1k7.webp', 1, 3),
-(4, 'Đèn', 'Các loại đèn chiếu sáng', 'den', 'https://res.cloudinary.com/dmgrdgvcf/image/upload/v1749716774/lighting_kghsld.webp', 1, 4),
-(5, 'Thảm', 'Các loại thảm trang trí', 'tham', 'https://res.cloudinary.com/dmgrdgvcf/image/upload/v1749716774/rug_jcvfsv.webp', 1, 5),
-(6, 'Ngoài trời', 'Nội thất ngoài trời', 'ngoai-troi', 'https://res.cloudinary.com/dmgrdgvcf/image/upload/v1749716774/outdoor_q1hcna.webp', 1, 6),
-(7, 'Sofa', 'Các loại sofa', 'sofa', 'https://res.cloudinary.com/dmgrdgvcf/image/upload/v1749716774/sofa_i18zy7.webp', 1, 7),
-(8, 'Decor', 'Đồ trang trí nội thất', 'decor', 'https://res.cloudinary.com/dmgrdgvcf/image/upload/v1749716774/accessories_w0bhs6.webp', 1, 8),
-(9, 'Giường', 'Các loại giường ngủ', 'giuong', 'https://res.cloudinary.com/dmgrdgvcf/image/upload/v1749716774/beds_ggcupm.webp', 1, 9);
+INSERT INTO category (
+    category_id,
+    category_name,
+    category_description,
+    slug,
+    category_image,
+    category_banner,
+    status,
+    category_priority
+) VALUES
+(1, 'Bàn', 'Các loại bàn nội thất', 'ban', 'https://res.cloudinary.com/dmgrdgvcf/image/upload/v1749715529/table_zevrpz.webp', 'https://res.cloudinary.com/dmgrdgvcf/image/upload/v1750012398/image_73_akjjil.png', 1, 1),
+(2, 'Ghế', 'Các loại ghế ngồi', 'ghe', 'https://res.cloudinary.com/dmgrdgvcf/image/upload/v1749715529/gh%E1%BA%BF_hzrc4u.webp', 'https://res.cloudinary.com/dmgrdgvcf/image/upload/v1750012399/image_76_xmgbfn.png', 1, 2),
+(3, 'Tủ', 'Các loại tủ lưu trữ', 'tu', 'https://res.cloudinary.com/dmgrdgvcf/image/upload/v1749715528/t%E1%BB%A7_lfkvme.webp', 'https://res.cloudinary.com/dmgrdgvcf/image/upload/v1750012398/image_75_ddypfl.png', 1, 3),
+(4, 'Đèn', 'Các loại đèn chiếu sáng', 'den', 'https://res.cloudinary.com/dmgrdgvcf/image/upload/v1749715528/%C4%91%C3%A8n_tvylu8.webp', 'https://res.cloudinary.com/dmgrdgvcf/image/upload/v1750012506/image_77_ze7psl.jpg', 1, 4),
+(5, 'Thảm', 'Các loại thảm trang trí', 'tham', 'https://res.cloudinary.com/dmgrdgvcf/image/upload/v1749715529/th%E1%BA%A3m_p0oqxs.webp', 'https://res.cloudinary.com/dmgrdgvcf/image/upload/v1750012399/image_76_xmgbfn.png', 1, 5),
+(6, 'Nội Thất Ngoài Trời', 'Nội thất ngoài trời', 'noi-that-ngoai-troi', 'https://res.cloudinary.com/dmgrdgvcf/image/upload/v1749715529/outdoor_b4biv4.webp', 'https://res.cloudinary.com/dmgrdgvcf/image/upload/v1750012399/image_78_c4jkib.png', 1, 6),
+(7, 'Sofa', 'Các loại sofa', 'sofa', 'https://res.cloudinary.com/dmgrdgvcf/image/upload/v1749715528/sofar_hu00oh.webp', 'https://res.cloudinary.com/dmgrdgvcf/image/upload/v1750012398/image_72_hnp8kb.png', 1, 7),
+(8, 'Phụ kiện', 'Đồ trang trí nội thất', 'phu-kien-noi-that', 'https://res.cloudinary.com/dmgrdgvcf/image/upload/v1749715528/ph%E1%BB%A5_ki%E1%BB%87n_i05kao.webp', 'https://res.cloudinary.com/dmgrdgvcf/image/upload/v1750012399/image_79_gw4mto.png', 1, 8),
+(9, 'Giường', 'Các loại giường ngủ', 'giuong', 'https://res.cloudinary.com/dmgrdgvcf/image/upload/v1749715528/gi%C6%B0%E1%BB%9Dng_dlhcvl.webp', 'https://res.cloudinary.com/dmgrdgvcf/image/upload/v1753619005/image_74_zswyv8_vpeiwv.jpg', 1, 9);
 SELECT setval('category_category_id_seq', (SELECT MAX(category_id) FROM category));
 
 -- Colors
@@ -781,10 +794,33 @@ INSERT INTO attributes (attribute_id, attribute_name, category_id) VALUES
 SELECT setval('attributes_attribute_id_seq', (SELECT MAX(attribute_id) FROM attributes));
 
 -- Banners
-INSERT INTO banners (banner_id, banner_title, banner_description, banner_image, banner_link, banner_priority, status, category_id) VALUES
-(1, 'SONA SPACE - Nội thất cao cấp', 'Khám phá bộ sưu tập nội thất hiện đại', 'https://res.cloudinary.com/dmgrdgvcf/image/upload/v1749716774/banner1.webp', '/collections', 1, 1, NULL),
-(2, 'Khuyến mãi mùa hè', 'Giảm đến 30% toàn bộ sản phẩm', 'https://res.cloudinary.com/dmgrdgvcf/image/upload/v1749716774/banner2.webp', '/promotions', 2, 1, NULL),
-(3, 'Sofa cao cấp', 'Thoải mái tột đỉnh cùng sofa BoConcept', 'https://res.cloudinary.com/dmgrdgvcf/image/upload/v1749716774/banner_sofa.webp', '/categories/sofa', 3, 1, 7);
+INSERT INTO banners (
+    banner_id,
+    banner_title,
+    banner_description,
+    banner_image,
+    banner_link,
+    banner_priority,
+    page_type,
+    status,
+    category_id,
+    start_date,
+    end_date,
+    created_at,
+    updated_at
+) VALUES
+(11, 'KHUYỄN MÃI HẤP DẪN CHO THÁNG 8', NULL, 'https://res.cloudinary.com/dmgrdgvcf/image/upload/v1750012398/image_73_akjjil.png', NULL, 1, 'home', 1, 1, '2025-06-26 03:37:46', NULL, '2025-06-26 03:37:46', '2025-08-16 13:32:23'),
+(12, 'CHÀO MỪNG BẠN ĐẾN VỚI SONA SPACE', NULL, 'https://res.cloudinary.com/dmgrdgvcf/image/upload/v1750012399/image_76_xmgbfn.png', NULL, 1, 'home', 1, 2, '2025-06-26 03:37:46', NULL, '2025-06-26 03:37:46', '2025-08-16 14:21:26'),
+(13, 'DECOR THEO KHÔNG GIAN SỐNG', NULL, 'https://res.cloudinary.com/dmgrdgvcf/image/upload/v1750012398/image_75_ddypfl.png', NULL, 1, 'san-pham', 1, 3, '2025-06-26 03:37:46', NULL, '2025-06-26 03:37:46', '2025-08-16 13:34:09'),
+(14, 'CHỌN SẢN PHẨM THEO GU', NULL, 'https://res.cloudinary.com/dmgrdgvcf/image/upload/v1750012506/image_77_ze7psl.jpg', NULL, 1, 'san-pham', 1, 4, '2025-06-26 03:37:46', NULL, '2025-06-26 03:37:46', '2025-08-16 13:34:35'),
+(15, 'KHÔNG GIAN', NULL, 'https://res.cloudinary.com/dmgrdgvcf/image/upload/v1750012399/image_76_xmgbfn.png', NULL, 1, 'khong-gian', 1, 5, '2025-06-26 03:37:46', NULL, '2025-06-26 03:37:46', '2025-08-16 13:35:45'),
+(16, 'KHÔNG GIAN MỞ', NULL, 'https://res.cloudinary.com/dmgrdgvcf/image/upload/v1750012399/image_78_c4jkib.png', NULL, 1, 'khong-gian', 1, 6, '2025-06-26 03:37:46', NULL, '2025-06-26 03:37:46', '2025-08-16 13:35:59'),
+(17, 'ĐĂNG KÝ', NULL, 'https://res.cloudinary.com/dmgrdgvcf/image/upload/v1750012398/image_72_hnp8kb.png', NULL, 1, 'dang-ky', 1, 7, '2025-06-26 03:37:46', NULL, '2025-06-26 03:37:46', '2025-08-16 13:36:09'),
+(18, 'ĐĂNG NHẬP', NULL, 'https://res.cloudinary.com/dmgrdgvcf/image/upload/v1750012399/image_79_gw4mto.png', NULL, 1, 'dang-nhap', 1, 8, '2025-06-26 03:37:46', NULL, '2025-06-26 03:37:46', '2025-08-16 13:36:19'),
+(19, 'QUẢN LÝ TÀI KHOẢN', NULL, 'https://res.cloudinary.com/dmgrdgvcf/image/upload/v1750012399/image_76_xmgbfn.png', NULL, 1, 'tai-khoan', 1, 9, '2025-06-26 03:37:46', NULL, '2025-06-26 03:37:46', '2025-08-16 13:36:30'),
+(26, 'KHÔNG GIAN GIÀNH CHO BẠN', NULL, 'https://res.cloudinary.com/dmgrdgvcf/image/upload/v1750012399/image_76_xmgbfn.png', NULL, 1, 'home', 1, 1, '2025-07-10 00:00:00', '2025-07-31 23:59:59', '2025-07-10 03:18:42', '2025-08-25 00:00:45'),
+(27, 'TIN TỨC VỀ NỘI THẤT', NULL, 'https://res.cloudinary.com/dmgrdgvcf/image/upload/v1750012399/image_76_xmgbfn.png', NULL, 1, 'tin-tuc', 1, 1, '2025-08-07 19:46:14', NULL, '2025-08-07 19:46:14', '2025-08-16 13:36:56'),
+(32, 'QUẢN TRỊ GIỎ HÀNG', NULL, 'banner-1754910683162-957530266.jpg', NULL, 1, 'gio-hang', 1, 6, '2025-08-11 00:00:00', '2025-08-31 00:00:00', '2025-08-11 18:11:23', '2025-08-16 13:34:53');
 SELECT setval('banners_banner_id_seq', (SELECT MAX(banner_id) FROM banners));
 
 -- News Category

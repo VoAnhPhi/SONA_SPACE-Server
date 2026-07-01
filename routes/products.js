@@ -203,7 +203,7 @@ router.get("/all", optionalAuth, async (req, res) => {
             FROM variant_product vp2
             JOIN color c2 ON vp2.color_id = c2.color_id
             WHERE vp2.product_id = p.product_id
-            ORDER BY c2.color_priority = 1 DESC, c2.color_priority ASC, vp2.variant_id ASC
+            ORDER BY c2.color_id = 1 DESC, c2.color_id ASC, vp2.variant_id ASC
             LIMIT 1
           ) AS variant_id,
           (
@@ -215,7 +215,7 @@ router.get("/all", optionalAuth, async (req, res) => {
                 FROM variant_product vp2
                 JOIN color c2 ON vp2.color_id = c2.color_id
                 WHERE vp2.product_id = p.product_id
-                ORDER BY c2.color_priority = 1 DESC, c2.color_priority ASC, vp2.variant_id ASC
+                ORDER BY c2.color_id = 1 DESC, c2.color_id ASC, vp2.variant_id ASC
                 LIMIT 1
               )
               AND w.user_id = ${userIdIndex}
@@ -445,7 +445,7 @@ router.get("/", optionalAuth, async (req, res) => {
       FROM variant_product vp2
       JOIN color c2 ON vp2.color_id = c2.color_id
       WHERE vp2.product_id = p.product_id
-      ORDER BY c2.color_priority = 1 DESC, c2.color_priority ASC, vp2.variant_id ASC
+      ORDER BY c2.color_id = 1 DESC, c2.color_id ASC, vp2.variant_id ASC
       LIMIT 1
     ) AS variant_id,
 
@@ -458,7 +458,7 @@ router.get("/", optionalAuth, async (req, res) => {
           FROM variant_product vp2
           JOIN color c2 ON vp2.color_id = c2.color_id
           WHERE vp2.product_id = p.product_id
-          ORDER BY c2.color_priority = 1 DESC, c2.color_priority ASC, vp2.variant_id ASC
+          ORDER BY c2.color_id = 1 DESC, c2.color_id ASC, vp2.variant_id ASC
           LIMIT 1
         )
         AND w.user_id = ${userIdIndex}
@@ -548,7 +548,7 @@ router.get("/search", async (req, res) => {
  * @desc    Láº¥y danh sÃ¡ch sáº£n pháº©m cho quáº£n trá»‹ viÃªn
  * @access  Private (Admin only)
  **/
-router.get("/admin", async (req, res) => {
+router.get("/admin", verifyToken, isAdmin, async (req, res) => {
   try {
     const { rows: products } = await db.query(`
       SELECT 
@@ -942,11 +942,11 @@ router.get("/full-list-all", async (req, res) => {
         vp.variant_product_list_image   AS list_image,
         col.color_name,
         col.color_code AS color_hex,
-        col.color_priority
+        col.color_id AS color_priority
       FROM variant_product vp
       JOIN color col ON vp.color_id = col.color_id
       WHERE vp.product_id = ANY($1::int[])
-      ORDER BY col.color_priority = 1 DESC, col.color_priority ASC, vp.variant_id ASC
+      ORDER BY col.color_id = 1 DESC, col.color_id ASC, vp.variant_id ASC
       `,
       [idParams]
     );
@@ -969,9 +969,12 @@ router.get("/full-list-all", async (req, res) => {
         pav.product_id,
         a.attribute_id,
         a.attribute_name,
-        a.unit,
-        a.is_required,
-        a.value_type,
+        NULL::text AS unit,
+        FALSE AS is_required,
+        CASE
+          WHEN pav.material_id IS NOT NULL THEN 'material_id'
+          ELSE NULL::text
+        END AS value_type,
         CASE
           WHEN pav.value IS NOT NULL AND pav.value <> '' THEN pav.value
           WHEN m.material_name IS NOT NULL THEN m.material_name
@@ -1258,11 +1261,11 @@ router.get("/ai-catalog", async (req, res) => {
         vp.variant_product_list_image   AS list_image,
         col.color_name,
         col.color_code AS color_hex,
-        col.color_priority
+        col.color_id AS color_priority
       FROM variant_product vp
       JOIN color col ON vp.color_id = col.color_id
       WHERE vp.product_id = ANY($1::int[])
-      ORDER BY col.color_priority = 1 DESC, col.color_priority ASC, vp.variant_id ASC
+      ORDER BY col.color_id = 1 DESC, col.color_id ASC, vp.variant_id ASC
       `,
       [productIds]
     );
@@ -1285,9 +1288,12 @@ router.get("/ai-catalog", async (req, res) => {
         pav.product_id,
         a.attribute_id,
         a.attribute_name,
-        a.unit,
-        a.is_required,
-        a.value_type,
+        NULL::text AS unit,
+        FALSE AS is_required,
+        CASE
+          WHEN pav.material_id IS NOT NULL THEN 'material_id'
+          ELSE NULL::text
+        END AS value_type,
         CASE
           WHEN pav.value IS NOT NULL AND pav.value <> '' THEN pav.value
           WHEN m.material_name IS NOT NULL THEN m.material_name
@@ -1454,198 +1460,6 @@ router.get("/ai-catalog", async (req, res) => {
   }
 });
 
-/**
- * @route   GET /api/products/:id
- * @desc    Láº¥y thÃ´ng tin chi tiáº¿t má»™t sáº£n pháº©m
- * @access  Public
- */
-router.get("/test/:slug", async (req, res) => {
-  const slug = req.params.slug;
-  if (!slug) return res.status(400).json({ message: "Slug khÃ´ng há»£p lá»‡" });
-
-  try {
-    // TÄƒng view trÆ°á»›c khi láº¥y dá»¯ liá»‡u
-    await db.query(
-      `UPDATE product SET product_view = product_view + 1 WHERE product_slug = $1`,
-      [slug]
-    );
-    // 1. Láº¥y thÃ´ng tin sáº£n pháº©m chÃ­nh
-    const { rows: productRows } = await db.query(
-      `
-      SELECT
-        p.*, c.category_name
-      FROM product p
-      LEFT JOIN category c ON p.category_id = c.category_id
-      WHERE p.product_slug = $1 AND p.product_status = 1
-      `,
-      [slug]
-    );
-
-    if (!productRows.length) {
-      return res.status(404).json({ error: "Product not found" });
-    }
-    const product = productRows[0];
-
-    // 2. Láº¥y danh sÃ¡ch táº¥t cáº£ biáº¿n thá»ƒ + mÃ u sáº¯c (Ä‘á»ƒ tÃ¬m biáº¿n thá»ƒ máº·c Ä‘á»‹nh vÃ  danh sÃ¡ch mÃ u)
-    const { rows: variants } = await db.query(
-      `
-      SELECT
-        vp.variant_id,
-        vp.product_id,
-        c.color_id,
-        c.color_name,
-        c.color_code AS color_hex,
-        c.color_priority,
-        vp.variant_product_price AS price,
-        vp.variant_product_price_sale AS price_sale,
-        vp.variant_product_quantity AS quantity,
-        vp.variant_product_slug AS slug,
-        vp.variant_product_list_image AS list_image
-      FROM variant_product vp
-      JOIN color c ON vp.color_id = c.color_id
-      WHERE vp.product_id = $1
-      ORDER BY c.color_priority DESC
-      `,
-      [product.product_id]
-    );
-
-    const variantsFull = variants.map((v) => ({
-      variant_id: v.variant_id,
-      product_id: v.product_id,
-      color_id: v.color_id,
-      color_name: v.color_name,
-      color_hex: v.color_hex,
-      quantity: v.quantity,
-      price: v.price,
-      price_sale: v.price_sale,
-      slug: v.slug,
-      list_image: v.list_image
-        ? v.list_image
-            .split(",")
-            .map((img) => img.trim().replace(/^['"]+|['"]+$/g, ""))
-        : [],
-    }));
-
-    // 3. TÃ¬m biáº¿n thá»ƒ máº·c Ä‘á»‹nh (Æ°u tiÃªn color_priority = 1)
-    let defaultVariant = variants.find((v) => v.color_priority === 1);
-    if (!defaultVariant && variants.length > 0) {
-      defaultVariant = variants[0];
-    }
-
-    // 4. Danh sÃ¡ch cÃ¡c mÃ u sáº¯c (nháº¹, khÃ´ng cáº§n áº£nh/giÃ¡)
-    const colors = variants.map((v) => ({
-      colorId: v.color_id,
-      colorName: v.color_name,
-      colorHex: v.color_hex,
-      slug: v.slug,
-    }));
-
-    const { rows: categoryAttributesDefinitions } = await db.query(
-      `
-      SELECT
-          attribute_id,
-          attribute_name,
-          unit,
-          is_required
-      FROM
-          attributes
-      WHERE
-          category_id = $1
-      ORDER BY
-          attribute_name; -- Hoáº·c sá»­ dá»¥ng má»™t cá»™t 'display_order' náº¿u cÃ³
-      `,
-      [product.category_id]
-    );
-
-    const { rows: productAttributeValues } = await db.query(
-      `
-      SELECT
-          pav.attribute_id,
-          CASE
-              WHEN pav.value IS NOT NULL AND pav.value != '' THEN pav.value
-              WHEN m.material_name IS NOT NULL THEN m.material_name
-              ELSE NULL
-          END AS value
-      FROM
-          product_attribute_value AS pav
-      LEFT JOIN
-          materials AS m ON pav.material_id = m.material_id
-      WHERE
-          pav.product_id = $1;
-      `,
-      [product.product_id]
-    );
-
-    const finalAttributes = categoryAttributesDefinitions.map((definedAttr) => {
-      const productValue = productAttributeValues.find(
-        (pav) => pav.attribute_id === definedAttr.attribute_id
-      );
-      return {
-        name: definedAttr.attribute_name,
-        value: productValue ? productValue.value : null,
-        unit: definedAttr.unit,
-        is_required: definedAttr.is_required,
-      };
-    });
-
-    // 5. Láº¥y sáº£n pháº©m liÃªn quan
-    const { rows: relatedProducts } = await db.query(
-      `
-      SELECT
-        p.product_id,
-        p.product_name,
-        p.product_slug
-      FROM product p
-      WHERE p.category_id = $1 AND p.product_id != $2 AND p.product_status = 1
-      LIMIT 4
-      `,
-      [product.category_id, product.product_id]
-    );
-
-    return res.json({
-      product: {
-        id: product.product_id,
-        name: product.product_name,
-        description: product.product_description,
-        slug: product.product_slug,
-        sold: product.product_sold,
-        view: product.product_view,
-        rating: product.product_rating,
-
-        status: product.product_status,
-        category_id: product.category_id,
-        category_name: product.category_name,
-        created_at: product.created_at,
-        updated_at: product.updated_at,
-        defaultPrice: defaultVariant?.price ?? null,
-        defaultPriceSale: defaultVariant?.price_sale ?? null,
-        defaultImages:
-          defaultVariant?.list_image
-            ?.split(",")
-            .map((img) => img.trim().replace(/^['"]+|['"]+$/g, "")) ?? [],
-        main_image: product.product_image
-          ? product.product_image.trim().replace(/^['"]+|['"]+$/g, "")
-          : "",
-        defaultSlug: defaultVariant?.slug ?? null,
-        defaultColorName: defaultVariant?.color_name ?? null,
-        defaultColorHex: defaultVariant?.color_hex ?? null,
-        defaultQuantity: defaultVariant?.quantity ?? null,
-        variants: variantsFull,
-        // --- Sá»­ dá»¥ng máº£ng thuá»™c tÃ­nh Ä‘Ã£ káº¿t há»£p á»Ÿ Ä‘Ã¢y ---
-        attributes: finalAttributes,
-      },
-      colors,
-      related_products: relatedProducts.map((rp) => ({
-        id: rp.product_id,
-        name: rp.product_name,
-        slug: rp.product_slug,
-      })),
-    });
-  } catch (error) {
-    res.status(500).json({ error: "Failed to fetch product details" });
-  }
-});
-
 router.get("/:slug", async (req, res) => {
   const slug = req.params.slug;
   if (!slug) return res.status(400).json({ message: "Slug khÃ´ng há»£p lá»‡" });
@@ -1677,7 +1491,7 @@ router.get("/:slug", async (req, res) => {
   c.color_id,
   c.color_name,
   c.color_code AS color_hex,
-  c.color_priority,
+  c.color_id AS color_priority,
   vp.variant_product_price AS price,
   vp.variant_product_price_sale AS price_sale,
   vp.variant_product_quantity AS quantity,
@@ -1686,7 +1500,7 @@ router.get("/:slug", async (req, res) => {
 FROM variant_product vp
 JOIN color c ON vp.color_id = c.color_id
 WHERE vp.product_id = $1
-ORDER BY c.color_priority DESC
+ORDER BY c.color_id DESC
 
       `,
       [product.product_id]
@@ -1909,7 +1723,7 @@ router.post("/", verifyToken, isAdmin, async (req, res) => {
  * @desc    Cáº­p nháº­t thÃ´ng tin sáº£n pháº©m
  * @access  Private (Admin only)
  */
-router.put("/:id", async (req, res) => {
+router.put("/:id", verifyToken, isAdmin, async (req, res) => {
   const id = Number(req.params.id);
   if (isNaN(id)) return res.status(400).json({ message: "ID pháº£i lÃ  sá»‘" });
 
@@ -2054,7 +1868,7 @@ router.put("/:id", async (req, res) => {
  * @desc    XÃ³a sáº£n pháº©m
  * @access  Private (Admin only)
  */
-router.delete("/:slug", async (req, res) => {
+router.delete("/:slug", verifyToken, isAdmin, async (req, res) => {
   const slug = req.params.slug;
   if (!slug) return res.status(400).json({ message: "Slug khÃ´ng há»£p lá»‡" });
   function extractPublicIdFromUrl(url) {
@@ -2313,7 +2127,7 @@ router.put("/status/:id", verifyToken, isAdmin, async (req, res) => {
  * @access  Private (Admin only)
  */
 
-router.post("/add", async (req, res) => {
+router.post("/add", verifyToken, isAdmin, async (req, res) => {
   try {
     const {
       name,
@@ -2369,7 +2183,7 @@ router.post("/add", async (req, res) => {
     let requiredAttributesFromDB = [];
     if (category_id) {
       const { rows: dbAttrs } = await db.query(
-        `SELECT attribute_id, is_required FROM attributes WHERE category_id = $1`,
+        `SELECT attribute_id, FALSE AS is_required FROM attributes WHERE category_id = $1`,
         [category_id]
       );
       requiredAttributesFromDB = dbAttrs;
@@ -2477,6 +2291,11 @@ router.post("/add", async (req, res) => {
     }
 
     try {
+      const totalVariantQuantity = variants.reduce(
+        (sum, variant) => sum + Number(variant.quantity || 0),
+        0
+      );
+
       const createdProduct = await withTransaction(async (client) => {
         const { rows: productRows } = await client.query(
           `INSERT INTO product (
@@ -2484,13 +2303,22 @@ router.post("/add", async (req, res) => {
           product_description,
           product_slug,
           category_id,
+          product_stock,
           product_status,
           product_image,
           created_at,
           updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
         RETURNING product_id`,
-          [name, description, slug, category_id, status, main_image]
+          [
+            name,
+            description,
+            slug,
+            category_id,
+            totalVariantQuantity,
+            status,
+            main_image,
+          ]
         );
         const productId = productRows[0]?.product_id;
 
@@ -2578,7 +2406,7 @@ router.post("/add", async (req, res) => {
  *  @access  Private (Admin only)
  */
 
-router.put("/admin/:slug", async (req, res) => {
+router.put("/admin/:slug", verifyToken, isAdmin, async (req, res) => {
   const { slug: currentSlug } = req.params;
   const {
     name,
@@ -2650,7 +2478,7 @@ router.put("/admin/:slug", async (req, res) => {
   } else {
     try {
       const { rows: categoryAttributesMeta } = await db.query(
-        `SELECT attribute_id, attribute_name, value_type, is_required
+        `SELECT attribute_id, attribute_name, NULL::text AS value_type, FALSE AS is_required
              FROM attributes
              WHERE category_id = $1`,
         [category_id]
@@ -2866,7 +2694,13 @@ router.put("/admin/:slug", async (req, res) => {
     );
 
     const { rows: productAttributesValues } = await db.query(
-      `SELECT pav.attribute_id, pav.value, pav.material_id, a.attribute_name, a.unit, a.is_required, a.value_type
+      `SELECT pav.attribute_id, pav.value, pav.material_id, a.attribute_name,
+              NULL::text AS unit,
+              FALSE AS is_required,
+              CASE
+                WHEN pav.material_id IS NOT NULL THEN 'material_id'
+                ELSE NULL::text
+              END AS value_type
          FROM product_attribute_value pav
          JOIN attributes a ON pav.attribute_id = a.attribute_id
          WHERE pav.product_id = $1`,
@@ -2894,7 +2728,7 @@ router.put("/admin/:slug", async (req, res) => {
  * @access  Private (Admin only)
  */
 
-router.get("/admin/:slug", async (req, res) => {
+router.get("/admin/:slug", verifyToken, isAdmin, async (req, res) => {
   const slug = req.params.slug;
   if (!slug) return res.status(400).json({ message: "Slug khÃ´ng há»£p lá»‡" });
 
@@ -2944,7 +2778,7 @@ router.get("/admin/:slug", async (req, res) => {
         c.color_id,
         c.color_name,
         c.color_code AS color_hex,
-        c.color_priority,
+        c.color_id AS color_priority,
         vp.variant_product_price AS price,
         vp.variant_product_price_sale AS price_sale,
         vp.variant_product_quantity AS quantity,
@@ -2953,7 +2787,7 @@ router.get("/admin/:slug", async (req, res) => {
       FROM variant_product vp
       JOIN color c ON vp.color_id = c.color_id
       WHERE vp.product_id = $1
-      ORDER BY c.color_priority DESC
+      ORDER BY c.color_id DESC
       `,
       [product.product_id]
     );
@@ -2994,9 +2828,12 @@ router.get("/admin/:slug", async (req, res) => {
           pav.value,
           pav.material_id,
           a.attribute_name,
-          a.unit,
-          a.is_required,
-          a.value_type -- Láº¥y trá»±c tiáº¿p value_type tá»« báº£ng attributes
+          NULL::text AS unit,
+          FALSE AS is_required,
+          CASE
+            WHEN pav.material_id IS NOT NULL THEN 'material_id'
+            ELSE NULL::text
+          END AS value_type
       FROM product_attribute_value pav
       JOIN attributes a ON pav.attribute_id = a.attribute_id
       WHERE pav.product_id = $1

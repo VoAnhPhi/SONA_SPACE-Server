@@ -286,11 +286,7 @@ router.get("/voucher/editvoucher/:id", (req, res) => {
 
 // View specific order
 router.get("/orders/view/:id", (req, res) => {
-  res.render("dashboard/orders/order-detail", {
-    title: "Order Details",
-    layout: "layouts/dashboard",
-    orderId: req.params.id,
-  });
+  res.redirect(`/dashboard/orders/detail/${req.params.id}`);
 });
 
 // Route for order details

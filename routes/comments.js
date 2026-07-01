@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const db = require("../config/database");
-const { verifyToken } = require("../middleware/auth");
+const { verifyToken, isAdmin } = require("../middleware/auth");
 const { withTransaction } = require("../db/transaction");
 
 const COMMENT_PRODUCT_JOINS = `
@@ -103,7 +103,7 @@ router.get("/", async (req, res) => {
  * @desc    Lay tat ca binh luan cho admin
  * @access  Private
  */
-router.get("/admin", async (req, res) => {
+router.get("/admin", verifyToken, isAdmin, async (req, res) => {
   try {
     const { rows } = await db.query(`
       SELECT
@@ -138,7 +138,7 @@ router.get("/admin", async (req, res) => {
   }
 });
 
-router.put("/:comment_id/status", async (req, res) => {
+router.put("/:comment_id/status", verifyToken, isAdmin, async (req, res) => {
   try {
     const commentId = Number(req.params.comment_id);
     if (!Number.isInteger(commentId)) {
@@ -692,7 +692,7 @@ router.delete("/:id", verifyToken, async (req, res) => {
 });
 
 // Toggle status an/hien comment
-router.put("/:id/toggle-status", async (req, res) => {
+router.put("/:id/toggle-status", verifyToken, isAdmin, async (req, res) => {
   try {
     const commentId = Number(req.params.id);
     if (!Number.isInteger(commentId)) {

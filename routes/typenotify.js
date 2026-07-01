@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const db = require("../config/database");
+const { verifyToken, isAdmin } = require("../middleware/auth");
 
 function parseId(value) {
   const parsed = Number.parseInt(value, 10);
@@ -48,7 +49,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-router.post("/", async (req, res) => {
+router.post("/", verifyToken, isAdmin, async (req, res) => {
   try {
     const { type_code, type_name, description, is_active, icon } = req.body;
     if (!type_code) {
@@ -80,7 +81,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-router.put("/:id/status", async (req, res) => {
+router.put("/:id/status", verifyToken, isAdmin, async (req, res) => {
   try {
     const id = parseId(req.params.id);
     if (!id) {
@@ -108,7 +109,7 @@ router.put("/:id/status", async (req, res) => {
   }
 });
 
-router.put("/:id", async (req, res) => {
+router.put("/:id", verifyToken, isAdmin, async (req, res) => {
   try {
     const id = parseId(req.params.id);
     if (!id) {
@@ -141,7 +142,7 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", verifyToken, isAdmin, async (req, res) => {
   try {
     const id = parseId(req.params.id);
     if (!id) {

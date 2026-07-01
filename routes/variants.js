@@ -69,6 +69,23 @@ function normalizeVariantPayload(body) {
   };
 }
 
+async function syncProductStock(productId) {
+  await db.query(
+    `
+    UPDATE product
+    SET
+      product_stock = COALESCE((
+        SELECT SUM(COALESCE(variant_product_quantity, 0))::int
+        FROM variant_product
+        WHERE product_id = $1
+      ), 0),
+      updated_at = NOW()
+    WHERE product_id = $1
+    `,
+    [productId]
+  );
+}
+
 /**
  * @route   GET /api/variants
  * @desc    Lay danh sach bien the san pham
@@ -145,7 +162,7 @@ router.get("/:productSlug/:colorId", async (req, res) => {
         c.color_id,
         c.color_name,
         c.color_code AS color_hex,
-        c.color_priority,
+        c.color_id AS color_priority,
         vp.variant_product_slug,
         vp.variant_product_quantity,
         vp.variant_product_price,
@@ -257,6 +274,7 @@ router.post("/", verifyToken, isAdmin, async (req, res) => {
     );
 
     const createdVariantId = insertedRows[0].variant_id;
+    await syncProductStock(productId);
     const { rows: variantRows } = await db.query(
       "SELECT * FROM variant_product WHERE variant_id = $1",
       [createdVariantId]
@@ -276,7 +294,7 @@ router.post("/", verifyToken, isAdmin, async (req, res) => {
  * @desc    Tao bien the moi cho san pham
  * @access  Private (Admin only)
  */
-router.post("/:productId", async (req, res) => {
+router.post("/:productId", verifyToken, isAdmin, async (req, res) => {
   const productId = parseId(req.params.productId);
   const payload = normalizeVariantPayload(req.body);
 
@@ -348,6 +366,8 @@ router.post("/:productId", async (req, res) => {
       ]
     );
 
+    await syncProductStock(productId);
+
     return res.status(201).json({
       message: "Tao bien the thanh cong",
       variant_id: insertedRows[0].variant_id,
@@ -366,7 +386,7 @@ router.post("/:productId", async (req, res) => {
  * @desc    Cap nhat thong tin bien the
  * @access  Private (Admin only)
  */
-router.put("/:variantId", async (req, res) => {
+router.put("/:variantId", verifyToken, isAdmin, async (req, res) => {
   const variantId = parseId(req.params.variantId);
   const payload = normalizeVariantPayload(req.body);
 
@@ -411,7 +431,7 @@ router.put("/:variantId", async (req, res) => {
 
   try {
     const { rows: existingRows } = await db.query(
-      "SELECT variant_id FROM variant_product WHERE variant_id = $1",
+      "SELECT variant_id, product_id FROM variant_product WHERE variant_id = $1",
       [variantId]
     );
 
@@ -441,6 +461,8 @@ router.put("/:variantId", async (req, res) => {
       ]
     );
 
+    await syncProductStock(existingRows[0].product_id);
+
     const { rows: updatedRows } = await db.query(
       "SELECT * FROM variant_product WHERE variant_id = $1",
       [variantId]
@@ -460,7 +482,7 @@ router.put("/:variantId", async (req, res) => {
  * @desc    Xoa bien the
  * @access  Private (Admin only)
  */
-router.delete("/:variantId", async (req, res) => {
+router.delete("/:variantId", verifyToken, isAdmin, async (req, res) => {
   const variantId = parseId(req.params.variantId);
 
   if (!variantId) {
@@ -507,6 +529,7 @@ router.delete("/:variantId", async (req, res) => {
     );
 
     await db.query("DELETE FROM variant_product WHERE variant_id = $1", [variantId]);
+    await syncProductStock(existingRows[0].product_id);
 
     return res.json({
       message: "Da xoa bien the va anh thanh cong",

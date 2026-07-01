@@ -49,6 +49,11 @@
   let allCategories = [];
   let currentFilteredCategories = [];
 
+  function getAuthHeaders() {
+    const token = localStorage.getItem("token");
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  }
+
   // --- Utility: bỏ dấu tiếng Việt + chuẩn hóa ---
   function normalizeText(str = "") {
     return String(str)
@@ -95,8 +100,15 @@
 
   document.addEventListener("DOMContentLoaded", function () {
     function getCategories() {
-      fetch("/api/categories/admin/all")
-        .then((response) => response.json())
+      fetch("/api/categories/admin/all", {
+        headers: getAuthHeaders(),
+      })
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error("Khong the tai danh sach danh muc");
+          }
+          return response.json();
+        })
         .then((data) => {
           allCategories = Array.isArray(data) ? data : [];
           currentFilteredCategories = [...allCategories];
@@ -242,9 +254,7 @@
         onConfirm: () => {
           fetch(`/api/categories/${categoryId}`, {
             method: "DELETE",
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem("token")}`,
-            },
+            headers: getAuthHeaders(),
           })
             .then((res) => res.json())
             .then((data) => {
@@ -270,12 +280,11 @@
     }
 
     function changeStatus(categoryId, categoryStatus) {
-      const token = localStorage.getItem("token");
       fetch(`/api/categories/${categoryId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          ...getAuthHeaders(),
         },
         body: JSON.stringify({ status: categoryStatus === "visible" ? 0 : 1 }),
       })
