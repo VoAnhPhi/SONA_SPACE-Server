@@ -2,53 +2,81 @@ const express = require("express");
 const router = express.Router();
 const db = require("../config/database");
 
-// GET tất cả vật liệu (chưa bị xóa)
+function materialStatusFromDeletedAt(deletedAt) {
+  return deletedAt ? 0 : 1;
+}
+
+function mapMaterialRow(row) {
+  return {
+    material_id: row.material_id,
+    material_name: row.material_name,
+    material_description: row.material_description,
+    slug: row.slug,
+    material_priority: null,
+    material_status: materialStatusFromDeletedAt(row.deleted_at),
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    deleted_at: row.deleted_at,
+  };
+}
+
+async function hasProductAttributeValueTable() {
+  const { rows } = await db.query(
+    "SELECT to_regclass('public.product_attribute_value') AS table_name"
+  );
+  return Boolean(rows[0]?.table_name);
+}
+
+// GET tat ca vat lieu (chua bi xoa)
 router.get("/", async (req, res) => {
-  const sql = `
-    SELECT material_id, material_name, material_description, slug,
-           material_priority, material_status, created_at, updated_at
-    FROM materials
-    WHERE deleted_at IS NULL
-    ORDER BY material_priority ASC, created_at DESC
-  `;
   try {
-    const [results] = await db.query(sql);
-    res.status(200).json(results);
-  } catch (err) {
-    res.status(500).json({
+    const { rows } = await db.query(
+      `
+      SELECT material_id, material_name, material_description, slug, created_at, updated_at, deleted_at
+      FROM materials
+      WHERE deleted_at IS NULL
+      ORDER BY created_at DESC
+      `
+    );
+
+    return res.status(200).json(rows.map(mapMaterialRow));
+  } catch (error) {
+    return res.status(500).json({
       success: false,
-      message: "Lỗi máy chủ khi lấy danh sách vật liệu.",
+      message: "Loi may chu khi lay danh sach vat lieu.",
     });
   }
 });
 
-// GET chi tiết vật liệu theo slug
+// GET chi tiet vat lieu theo slug
 router.get("/:slug", async (req, res) => {
   const { slug } = req.params;
 
-  const sql = `
-    SELECT material_id, material_name, material_description, slug,
-           material_priority, material_status, created_at, updated_at
-    FROM materials
-    WHERE slug = ? AND deleted_at IS NULL
-  `;
   try {
-    const [results] = await db.query(sql, [slug]);
-    if (results.length === 0) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Vật liệu không tìm thấy." });
+    const { rows } = await db.query(
+      `
+      SELECT material_id, material_name, material_description, slug, created_at, updated_at, deleted_at
+      FROM materials
+      WHERE slug = $1 AND deleted_at IS NULL
+      LIMIT 1
+      `,
+      [slug]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Vat lieu khong tim thay." });
     }
-    res.status(200).json({ success: true, material: results[0] });
-  } catch (err) {
-    res.status(500).json({
+
+    return res.status(200).json({ success: true, material: mapMaterialRow(rows[0]) });
+  } catch (error) {
+    return res.status(500).json({
       success: false,
-      message: "Lỗi máy chủ khi lấy vật liệu.",
+      message: "Loi may chu khi lay vat lieu.",
     });
   }
 });
 
-// POST thêm mới vật liệu
+// POST them moi vat lieu
 router.post("/", async (req, res) => {
   const {
     material_name,
@@ -61,52 +89,45 @@ router.post("/", async (req, res) => {
   if (!material_name || !slug) {
     return res.status(400).json({
       success: false,
-      message: "Tên vật liệu và slug là bắt buộc.",
+      message: "Ten vat lieu va slug la bat buoc.",
     });
   }
 
-  const sql = `
-    INSERT INTO materials (
-      material_name, material_description, slug,
-      material_priority, material_status
-    ) VALUES (?, ?, ?, ?, ?)
-  `;
   try {
-    const [result] = await db.query(sql, [
-      material_name,
-      material_description,
-      slug,
-      material_priority,
-      material_status,
-    ]);
-    res.status(201).json({
+    const { rows: insertedRows } = await db.query(
+      `
+      INSERT INTO materials (material_name, material_description, slug, created_at, updated_at)
+      VALUES ($1, $2, $3, NOW(), NOW())
+      RETURNING material_id, material_name, material_description, slug, created_at, updated_at, deleted_at
+      `,
+      [material_name, material_description, slug]
+    );
+
+    return res.status(201).json({
       success: true,
-      message: "Vật liệu đã được thêm thành công.",
+      message: "Vat lieu da duoc them thanh cong.",
       material: {
-        material_id: result.insertId,
-        material_name,
-        material_description,
-        slug,
+        ...mapMaterialRow(insertedRows[0]),
         material_priority,
         material_status,
-        created_at: new Date(),
       },
     });
-  } catch (err) {
-    if (err.code === "ER_DUP_ENTRY") {
+  } catch (error) {
+    if (error.code === "23505") {
       return res.status(409).json({
         success: false,
-        message: "Loại vật liệu này đã tồn tại.",
+        message: "Loai vat lieu nay da ton tai.",
       });
     }
-    res.status(500).json({
+
+    return res.status(500).json({
       success: false,
-      message: "Lỗi máy chủ khi thêm vật liệu mới.",
+      message: "Loi may chu khi them vat lieu moi.",
     });
   }
 });
 
-// PUT cập nhật vật liệu
+// PUT cap nhat vat lieu
 router.put("/:slug", async (req, res) => {
   const oldSlug = req.params.slug;
   const {
@@ -120,155 +141,175 @@ router.put("/:slug", async (req, res) => {
   if (!material_name || !newSlug) {
     return res.status(400).json({
       success: false,
-      message: "Tên vật liệu và slug mới là bắt buộc.",
+      message: "Ten vat lieu va slug moi la bat buoc.",
     });
   }
 
   try {
-    const [materialToUpdate] = await db.query(
-      "SELECT material_id FROM materials WHERE slug = ? AND deleted_at IS NULL",
+    const { rows: targetRows } = await db.query(
+      "SELECT material_id FROM materials WHERE slug = $1 AND deleted_at IS NULL LIMIT 1",
       [oldSlug]
     );
-    if (materialToUpdate.length === 0) {
+
+    if (!targetRows.length) {
       return res.status(404).json({
         success: false,
-        message: "Vật liệu không tìm thấy để cập nhật.",
+        message: "Vat lieu khong tim thay de cap nhat.",
       });
     }
 
-    const updateSql = `
+    const materialId = targetRows[0].material_id;
+
+    const { rowCount } = await db.query(
+      `
       UPDATE materials
-      SET material_name = ?, material_description = ?, slug = ?,
-          material_priority = ?, material_status = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE material_id = ?
-    `;
-    const [result] = await db.query(updateSql, [
-      material_name,
-      material_description,
-      newSlug,
-      material_priority,
-      material_status,
-      materialToUpdate[0].material_id,
-    ]);
+      SET material_name = $1,
+          material_description = $2,
+          slug = $3,
+          updated_at = NOW(),
+          deleted_at = CASE WHEN $4::int = 0 THEN COALESCE(deleted_at, NOW()) ELSE NULL END
+      WHERE material_id = $5
+      `,
+      [
+        material_name,
+        material_description,
+        newSlug,
+        Number(material_status) === 0 ? 0 : 1,
+        materialId,
+      ]
+    );
 
-    if (result.affectedRows === 0) {
+    if (rowCount === 0) {
       return res.status(404).json({
         success: false,
-        message: "Không có thay đổi hoặc vật liệu không tồn tại.",
+        message: "Khong co thay doi hoac vat lieu khong ton tai.",
       });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
-      message: "Vật liệu đã được cập nhật thành công.",
+      message: "Vat lieu da duoc cap nhat thanh cong.",
+      material_priority,
     });
-  } catch (err) {
-    if (err.code === "ER_DUP_ENTRY") {
+  } catch (error) {
+    if (error.code === "23505") {
       return res.status(409).json({
         success: false,
-        message: "Slug mới đã tồn tại cho một vật liệu khác.",
+        message: "Slug moi da ton tai cho mot vat lieu khac.",
       });
     }
-    res.status(500).json({
+
+    return res.status(500).json({
       success: false,
-      message: "Lỗi máy chủ khi cập nhật vật liệu.",
+      message: "Loi may chu khi cap nhat vat lieu.",
     });
   }
 });
 
-// PUT toggle status (ẩn/hiện) vật liệu
+// PUT toggle status (an/hien) vat lieu
 router.put("/:slug/toggle-status", async (req, res) => {
   const { slug } = req.params;
   if (!slug) {
-    return res
-      .status(400)
-      .json({ success: false, message: "Slug là bắt buộc." });
+    return res.status(400).json({ success: false, message: "Slug la bat buoc." });
   }
+
   try {
-    // Lấy trạng thái hiện tại
-    const [rows] = await db.query(
-      "SELECT material_status FROM materials WHERE slug = ? AND deleted_at IS NULL",
+    const { rows } = await db.query(
+      `
+      SELECT material_id, deleted_at
+      FROM materials
+      WHERE slug = $1
+      LIMIT 1
+      `,
       [slug]
     );
-    if (rows.length === 0) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Vật liệu không tìm thấy." });
+
+    if (!rows.length) {
+      return res.status(404).json({ success: false, message: "Vat lieu khong tim thay." });
     }
-    const currentStatus = rows[0].material_status;
-    const newStatus = currentStatus === 1 ? 0 : 1;
+
+    const material = rows[0];
+    const newDeletedAt = material.deleted_at ? null : new Date();
+    const newStatus = newDeletedAt ? 0 : 1;
+
     await db.query(
-      "UPDATE materials SET material_status = ?, updated_at = CURRENT_TIMESTAMP WHERE slug = ?",
-      [newStatus, slug]
+      "UPDATE materials SET deleted_at = $1, updated_at = NOW() WHERE material_id = $2",
+      [newDeletedAt, material.material_id]
     );
-    res.json({
+
+    return res.json({
       success: true,
-      message: "Cập nhật trạng thái thành công.",
+      message: "Cap nhat trang thai thanh cong.",
       status: newStatus,
     });
-  } catch (err) {
-    res.status(500).json({
+  } catch (error) {
+    return res.status(500).json({
       success: false,
-      message: "Lỗi máy chủ khi cập nhật trạng thái.",
+      message: "Loi may chu khi cap nhat trang thai.",
     });
   }
 });
 
-// DELETE vật liệu (xóa cứng)
+// DELETE vat lieu
 router.delete("/:slug", async (req, res) => {
   const { slug } = req.params;
+
   try {
-    // Lấy material_id từ slug
-    const [materials] = await db.query(
-      "SELECT material_id FROM materials WHERE slug = ?",
+    const { rows: materialRows } = await db.query(
+      "SELECT material_id FROM materials WHERE slug = $1 LIMIT 1",
       [slug]
     );
-    if (materials.length === 0) {
+
+    if (!materialRows.length) {
       return res.status(404).json({
         success: false,
-        message: "Vật liệu không tìm thấy để xóa.",
+        message: "Vat lieu khong tim thay de xoa.",
       });
     }
-    const materialId = materials[0].material_id;
 
-    // Kiểm tra xem có sản phẩm sử dụng material này không
-    const [used] = await db.query(
-      "SELECT COUNT(*) as count FROM product_attribute_value WHERE material_id = ?",
-      [materialId]
-    );
-    if (used[0].count > 0) {
-      // Nếu có sản phẩm sử dụng, cập nhật trạng thái sang ẩn
-      await db.query(
-        "UPDATE materials SET material_status = 0, updated_at = CURRENT_TIMESTAMP WHERE material_id = ?",
+    const materialId = materialRows[0].material_id;
+
+    const hasPivotTable = await hasProductAttributeValueTable();
+    if (hasPivotTable) {
+      const { rows: usedRows } = await db.query(
+        "SELECT COUNT(*)::int AS count FROM product_attribute_value WHERE material_id = $1",
         [materialId]
       );
-      return res.status(200).json({
+
+      if (usedRows[0].count > 0) {
+        await db.query(
+          "UPDATE materials SET deleted_at = NOW(), updated_at = NOW() WHERE material_id = $1",
+          [materialId]
+        );
+
+        return res.status(200).json({
+          success: false,
+          message:
+            "Da co san pham su dung chat lieu nay, trang thai se chuyen sang an.",
+          status: "hidden",
+        });
+      }
+    }
+
+    const { rowCount } = await db.query("DELETE FROM materials WHERE material_id = $1", [
+      materialId,
+    ]);
+
+    if (rowCount === 0) {
+      return res.status(404).json({
         success: false,
-        message:
-          "Đã có sản phẩm sử dụng chất liệu này, trạng thái sẽ chuyển sang ẩn.",
-        status: "hidden",
+        message: "Vat lieu khong tim thay de xoa.",
       });
     }
 
-    // Nếu không có sản phẩm sử dụng, xóa cứng
-    const [result] = await db.query(
-      "DELETE FROM materials WHERE material_id = ?",
-      [materialId]
-    );
-    if (result.affectedRows === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "Vật liệu không tìm thấy để xóa.",
-      });
-    }
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
-      message: "Vật liệu đã được xóa thành công.",
+      message: "Vat lieu da duoc xoa thanh cong.",
     });
-  } catch (err) {
-    res.status(500).json({
+  } catch (error) {
+    return res.status(500).json({
       success: false,
-      message: "Lỗi máy chủ khi xóa vật liệu.",
+      message: "Loi may chu khi xoa vat lieu.",
     });
   }
 });

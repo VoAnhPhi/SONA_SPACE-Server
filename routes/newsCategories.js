@@ -2,362 +2,362 @@ const express = require("express");
 const router = express.Router();
 const db = require("../config/database");
 const { verifyToken, isAdmin } = require("../middleware/auth");
+
 function generateSlug(str) {
-  return str
+  return String(str || "")
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/đ/g, "d")
+    .replace(/\u0111/g, "d")
     .replace(/[^a-z0-9\s-]/g, "")
     .trim()
     .replace(/\s+/g, "-")
     .replace(/\-+/g, "-");
 }
 
+function parseId(value) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isInteger(parsed) ? parsed : null;
+}
+
 /**
  * @route   GET /api/news-categories
- * @desc    Lấy danh sách danh mục tin tức (generated from news table)
+ * @desc    Lay danh sach danh muc tin tuc
  * @access  Public
  */
 router.get("/", async (req, res) => {
   try {
-    const [results] = await db.query(`
-      SELECT 
-        c.id,
-        c.name,
-        c.slug,
-        c.status,
-        c.image,
-        c.priority,
+    const { rows } = await db.query(`
+      SELECT
+        c.news_category_id AS id,
+        c.news_category_name AS name,
+        c.news_category_slug AS slug,
+        c.news_category_status AS status,
+        NULL::text AS image,
+        NULL::int AS priority,
         c.updated_at,
         c.created_at,
         c.deleted_at,
-        COUNT(n.news_id) as news_count
-      FROM (
-        SELECT DISTINCT 
-          news_category_id as id,
-          CASE 
-            WHEN news_category_id IS NULL THEN 'Chưa phân loại'
-            ELSE news_category_name
-          END as name,
-          news_category_slug as slug,
-          news_category_status as status,
-          news_category_image as image,
-          news_category_priority as priority,
-          updated_at,
-          created_at,
-          deleted_at
-        FROM news_category
-      ) c
-      LEFT JOIN news n ON n.news_category_id = c.id
-      GROUP BY c.id, c.name, c.slug, c.status, c.image, c.priority, c.updated_at, c.created_at, c.deleted_at
-      ORDER BY c.created_at DESC;
+        COUNT(n.news_id)::int AS news_count
+      FROM news_category c
+      LEFT JOIN news n ON n.news_category_id = c.news_category_id
+      GROUP BY c.news_category_id
+      ORDER BY c.created_at DESC
     `);
 
-    res.json(results);
+    return res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch categories" });
+    return res.status(500).json({ error: "Failed to fetch categories" });
   }
 });
 
 /**
- * @route   GET /api/news-categories/:id
- * @desc    Lấy thông tin danh mục tin tức
+ * @route   GET /api/news-categories/:slug
+ * @desc    Lay thong tin danh muc tin tuc
  * @access  Public
  */
-
 router.get("/:slug", async (req, res) => {
   try {
     const slug = req.params.slug;
 
     if (!slug || typeof slug !== "string") {
-      return res.status(400).json({ error: "Slug không hợp lệ." });
+      return res.status(400).json({ error: "Slug khong hop le." });
     }
 
-    const [rows] = await db.query(
+    const { rows } = await db.query(
       `
-      SELECT 
+      SELECT
         news_category_id,
         news_category_name,
         news_category_slug,
-        news_category_image,
-        news_category_priority,
         news_category_status
       FROM news_category
-      WHERE news_category_slug = ?
-    `,
+      WHERE news_category_slug = $1
+      LIMIT 1
+      `,
       [slug]
     );
 
     if (rows.length === 0) {
-      return res
-        .status(404)
-        .json({ error: "Không tìm thấy danh mục theo slug." });
+      return res.status(404).json({ error: "Khong tim thay danh muc theo slug." });
     }
 
     const category = rows[0];
 
-    res.json({
+    return res.json({
       id: category.news_category_id,
       name: category.news_category_name,
       slug: category.news_category_slug,
-      image: category.news_category_image,
-      priority: category.news_category_priority,
+      image: null,
+      priority: null,
       status: category.news_category_status,
     });
-  } catch (err) {
-    res.status(500).json({ error: "Lỗi máy chủ." });
+  } catch (error) {
+    return res.status(500).json({ error: "Loi may chu." });
   }
 });
 
 /**
  * @route   POST /api/news-categories
- * @desc    [Disabled] Tạo danh mục tin tức mới
+ * @desc    Tao danh muc tin tuc moi
  * @access  Private (Admin only)
  */
 router.post("/", verifyToken, isAdmin, async (req, res) => {
   const { name, status = 1, image, priority } = req.body;
 
-  // Validate dữ liệu đầu vào
   if (!name || typeof name !== "string") {
     return res
       .status(400)
-      .json({ error: "Tên danh mục là bắt buộc và phải là chuỗi." });
+      .json({ error: "Ten danh muc la bat buoc va phai la chuoi." });
   }
 
-  if (![0, 1].includes(Number(status))) {
-    return res.status(400).json({ error: "Trạng thái không hợp lệ." });
+  const statusNumber = Number(status);
+  if (![0, 1].includes(statusNumber)) {
+    return res.status(400).json({ error: "Trang thai khong hop le." });
   }
+
   if (!image) {
-    return res
-      .status(400)
-      .json({ error: "Không thể upload danh mục tin không có hình ảnh " });
+    return res.status(400).json({ error: "Khong the upload danh muc tin khong co hinh anh" });
   }
 
   if (
     priority === undefined ||
     priority === "" ||
-    isNaN(priority) ||
+    Number.isNaN(Number(priority)) ||
     Number(priority) < 0
   ) {
     return res
       .status(400)
-      .json({ error: "Độ ưu tiên là bắt buộc và phải là số >= 0." });
-  }
-
-  if (priority < 0 || isNaN(priority)) {
-    return res.status(400).json({ error: "Độ ưu tiên không hợp lệ." });
+      .json({ error: "Do uu tien la bat buoc va phai la so >= 0." });
   }
 
   try {
     const slug = req.body.slug || generateSlug(name);
-    const [slugCheck] = await db.query(
-      "SELECT * FROM news_category WHERE news_category_slug = ?",
+
+    const { rows: slugRows } = await db.query(
+      "SELECT news_category_id FROM news_category WHERE news_category_slug = $1 LIMIT 1",
       [slug]
     );
 
-    if (slugCheck.length > 0) {
+    if (slugRows.length > 0) {
       return res.status(400).json({
-        error: "Slug đã tồn tại, vui lòng nhập tên khác hoặc chỉnh lại slug.",
+        error: "Slug da ton tai, vui long nhap ten khac hoac chinh lai slug.",
       });
     }
-    const [result] = await db.query(
+
+    const { rows: insertedRows } = await db.query(
       `
-      INSERT INTO news_category (news_category_name, news_category_slug, news_category_image, news_category_status, news_category_priority)
-      VALUES (?, ?, ?, ?, ?)
-    `,
-      [name, slug, image, status, priority]
+      INSERT INTO news_category (
+        news_category_name,
+        news_category_slug,
+        news_category_status,
+        created_at,
+        updated_at
+      ) VALUES ($1, $2, $3, NOW(), NOW())
+      RETURNING news_category_id
+      `,
+      [name, slug, statusNumber]
     );
 
-    res.status(201).json({
-      message: "Tạo danh mục thành công",
+    return res.status(201).json({
+      message: "Tao danh muc thanh cong",
       category: {
-        id: result.insertId,
+        id: insertedRows[0].news_category_id,
         name,
         slug,
-        image: image,
-        status,
-        priority,
+        image,
+        status: statusNumber,
+        priority: Number(priority),
       },
     });
   } catch (error) {
-    res.status(500).json({ error: "Lỗi máy chủ khi tạo danh mục" });
+    return res.status(500).json({ error: "Loi may chu khi tao danh muc" });
   }
 });
 
 router.put("/:id/status", verifyToken, isAdmin, async (req, res) => {
-  const { id } = req.params;
+  const id = parseId(req.params.id);
   const { status } = req.body;
+
+  if (!id) {
+    return res.status(400).json({ error: "ID danh muc khong hop le." });
+  }
 
   const statusNumber = Number(status);
   if (![0, 1].includes(statusNumber)) {
-    return res.status(400).json({ error: "Trạng thái không hợp lệ. Chỉ chấp nhận 0 hoặc 1." });
+    return res.status(400).json({ error: "Trang thai khong hop le. Chi chap nhan 0 hoac 1." });
   }
 
   try {
-    const [result] = await db.query(
+    const { rowCount } = await db.query(
       `
       UPDATE news_category
-      SET news_category_status = ?
-      WHERE news_category_id = ?
+      SET news_category_status = $1, updated_at = NOW()
+      WHERE news_category_id = $2
       `,
       [statusNumber, id]
     );
 
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: "Không tìm thấy danh mục theo ID." });
+    if (rowCount === 0) {
+      return res.status(404).json({ error: "Khong tim thay danh muc theo ID." });
     }
 
-    res.json({ message: "Cập nhật trạng thái danh mục thành công." });
-  } catch (err) {
-    res.status(500).json({ error: "Không thể cập nhật trạng thái. Vui lòng thử lại." });
+    return res.json({ message: "Cap nhat trang thai danh muc thanh cong." });
+  } catch (error) {
+    return res.status(500).json({ error: "Khong the cap nhat trang thai. Vui long thu lai." });
   }
 });
 
 /**
- * @route   PUT /api/news-categories/:id
- * @desc    [Disabled] Cập nhật danh mục tin tức
+ * @route   PUT /api/news-categories/:slug
+ * @desc    Cap nhat danh muc tin tuc
  * @access  Private (Admin only)
  */
 router.put("/:slug", verifyToken, isAdmin, async (req, res) => {
   const { slug: oldSlug } = req.params;
   const { name, slug: newSlug, image = null, priority, status } = req.body;
 
-  // Validate name
   if (!name || typeof name !== "string" || name.trim() === "") {
     return res
       .status(400)
-      .json({ error: "Tên danh mục tin là bắt buộc và phải là chuỗi." });
+      .json({ error: "Ten danh muc tin la bat buoc va phai la chuoi." });
   }
 
-  // Validate slug
   if (!newSlug || typeof newSlug !== "string" || newSlug.trim() === "") {
     return res
       .status(400)
-      .json({ error: "Slug mới là bắt buộc và phải là chuỗi." });
+      .json({ error: "Slug moi la bat buoc va phai la chuoi." });
   }
 
-  // Validate status
   const statusNumber = Number(status);
   if (![0, 1].includes(statusNumber)) {
-    return res.status(400).json({ error: "Trạng thái không hợp lệ." });
+    return res.status(400).json({ error: "Trang thai khong hop le." });
   }
 
-  // Validate priority
   const priorityNumber = Number(priority);
-  if (isNaN(priorityNumber) || priorityNumber < 0) {
-    return res.status(400).json({ error: "Độ ưu tiên không hợp lệ." });
+  if (Number.isNaN(priorityNumber) || priorityNumber < 0) {
+    return res.status(400).json({ error: "Do uu tien khong hop le." });
   }
 
   try {
-    const [result] = await db.query(
+    const { rowCount } = await db.query(
       `
       UPDATE news_category
-      SET 
-        news_category_name = ?,
-        news_category_slug = ?,     
-        news_category_image = ?,
-        news_category_priority = ?,
-        news_category_status = ?
-      WHERE news_category_slug = ?
-    `,
-      [
-        name.trim(),
-        newSlug.trim(),
-        image,
-        priorityNumber,
-        statusNumber,
-        oldSlug,
-      ]
+      SET
+        news_category_name = $1,
+        news_category_slug = $2,
+        news_category_status = $3,
+        updated_at = NOW()
+      WHERE news_category_slug = $4
+      `,
+      [name.trim(), newSlug.trim(), statusNumber, oldSlug]
     );
 
-    if (result.affectedRows === 0) {
-      return res
-        .status(404)
-        .json({ error: "Không tìm thấy danh mục theo slug." });
+    if (rowCount === 0) {
+      return res.status(404).json({ error: "Khong tim thay danh muc theo slug." });
     }
 
-    res.json({ message: "Cập nhật danh mục thành công." });
-  } catch (err) {
-    res
-      .status(500)
-      .json({ error: "Không thể cập nhật danh mục. Vui lòng thử lại." });
+    return res.json({
+      message: "Cap nhat danh muc thanh cong.",
+      category: {
+        name: name.trim(),
+        slug: newSlug.trim(),
+        status: statusNumber,
+        image,
+        priority: priorityNumber,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ error: "Khong the cap nhat danh muc. Vui long thu lai." });
   }
 });
 
 /**
  * @route   DELETE /api/news-categories/:id
- * @desc    [Disabled] Xóa danh mục tin tức
+ * @desc    Xoa danh muc tin tuc
  * @access  Private (Admin only)
  */
 router.delete("/:id", verifyToken, isAdmin, async (req, res) => {
   try {
-    const categoryId = parseInt(req.params.id);
-    if (isNaN(categoryId) || categoryId <= 0) {
-      return res.status(400).json({ error: "ID danh mục không hợp lệ" });
+    const categoryId = parseId(req.params.id);
+    if (!categoryId || categoryId <= 0) {
+      return res.status(400).json({ error: "ID danh muc khong hop le" });
     }
 
-    // Kiểm tra danh mục tồn tại
-    const [categories] = await db.query(
-      `SELECT * FROM news_category WHERE news_category_id = ?`,
+    const { rows: categories } = await db.query(
+      "SELECT news_category_id FROM news_category WHERE news_category_id = $1",
       [categoryId]
     );
 
     if (categories.length === 0) {
-      return res.status(404).json({ error: "Không tìm thấy danh mục" });
+      return res.status(404).json({ error: "Khong tim thay danh muc" });
     }
 
-    // Kiểm tra xem có bài viết nào đang dùng danh mục này không
-    const [usedNews] = await db.query(
-      `SELECT COUNT(*) as count FROM news WHERE news_category_id = ?`,
+    const { rows: usedRows } = await db.query(
+      "SELECT COUNT(*)::int AS count FROM news WHERE news_category_id = $1",
       [categoryId]
     );
 
-    if (usedNews[0].count > 0) {
+    if (usedRows[0].count > 0) {
       return res.status(400).json({
-        error: `Không thể xóa danh mục này vì có ${usedNews[0].count} bài viết đang sử dụng.`,
+        error: `Khong the xoa danh muc nay vi co ${usedRows[0].count} bai viet dang su dung.`,
       });
     }
 
-    // Tiến hành xóa
-    await db.query(`DELETE FROM news_category WHERE news_category_id = ?`, [
-      categoryId,
-    ]);
+    await db.query("DELETE FROM news_category WHERE news_category_id = $1", [categoryId]);
 
-    res.json({ message: "Xoá danh mục thành công" });
+    return res.json({ message: "Xoa danh muc thanh cong" });
   } catch (error) {
-    res.status(500).json({ error: "Không thể xoá danh mục" });
+    return res.status(500).json({ error: "Khong the xoa danh muc" });
   }
 });
 
-// tin tức theo category
+// Tin tuc theo category
 router.get("/news/:slug", async (req, res) => {
   try {
     const slug = req.params.slug;
-    const [id] = await db.query(
-      `SELECT news_category_id FROM news_category WHERE news_category_slug = ?`,
+
+    const { rows: categoryRows } = await db.query(
+      `
+      SELECT news_category_id, news_category_name, news_category_slug
+      FROM news_category
+      WHERE news_category_slug = $1
+      LIMIT 1
+      `,
       [slug]
     );
-    const [rows] = await db.query(
-      `SELECT 
+
+    if (!categoryRows.length) {
+      return res.status(404).json({ error: "Category not found" });
+    }
+
+    const category = categoryRows[0];
+
+    const { rows: newsRows } = await db.query(
+      `
+      SELECT
         news_id,
         news_image,
         news_slug,
         news_title,
         created_at
-        FROM news WHERE news_category_id = ? AND news_status = 1 ORDER BY created_at DESC`,
-      [id[0].news_category_id]
+      FROM news
+      WHERE news_category_id = $1 AND news_status = 1
+      ORDER BY created_at DESC
+      `,
+      [category.news_category_id]
     );
-    res.json({
-      news: rows,
+
+    return res.json({
+      news: newsRows,
       category: {
-        id: id[0].news_category_id,
-        name: id[0].news_category_name,
-        slug: id[0].news_category_slug,
+        id: category.news_category_id,
+        name: category.news_category_name,
+        slug: category.news_category_slug,
       },
     });
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch news" });
+    return res.status(500).json({ error: "Failed to fetch news" });
   }
 });
 

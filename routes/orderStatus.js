@@ -1,186 +1,104 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const db = require('../config/database');
-const { verifyToken, isAdmin } = require('../middleware/auth');
+const { verifyToken, isAdmin } = require("../middleware/auth");
 
-/**
- * @route   GET /api/order-status
- * @desc    Lấy danh sách trạng thái đơn hàng
- * @access  Private
- */
-router.get('/', async (req, res) => {
-  try {
-    const [statuses] = await db.query('SELECT * FROM order_status ORDER BY order_status_id ASC');
-    res.json(statuses);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch order statuses' });
-  }
+const ORDER_STATUSES = [
+  {
+    order_status_id: -1,
+    id: -1,
+    order_status_name: "cancelled",
+    name: "cancelled",
+    label: "Cancelled",
+    order_status_color: "#ef4444",
+    color: "#ef4444",
+    description: "Order was cancelled before completion",
+  },
+  {
+    order_status_id: 0,
+    id: 0,
+    order_status_name: "pending",
+    name: "pending",
+    label: "Pending",
+    order_status_color: "#f59e0b",
+    color: "#f59e0b",
+    description: "Order has been created and is waiting for confirmation",
+  },
+  {
+    order_status_id: 1,
+    id: 1,
+    order_status_name: "confirmed",
+    name: "confirmed",
+    label: "Confirmed",
+    order_status_color: "#3b82f6",
+    color: "#3b82f6",
+    description: "Order has been confirmed by the store",
+  },
+  {
+    order_status_id: 2,
+    id: 2,
+    order_status_name: "shipping",
+    name: "shipping",
+    label: "Shipping",
+    order_status_color: "#8b5cf6",
+    color: "#8b5cf6",
+    description: "Order is being shipped to the customer",
+  },
+  {
+    order_status_id: 3,
+    id: 3,
+    order_status_name: "delivered",
+    name: "delivered",
+    label: "Delivered",
+    order_status_color: "#14b8a6",
+    color: "#14b8a6",
+    description: "Order has been delivered to the customer",
+  },
+  {
+    order_status_id: 4,
+    id: 4,
+    order_status_name: "completed",
+    name: "completed",
+    label: "Completed",
+    order_status_color: "#22c55e",
+    color: "#22c55e",
+    description: "Order has been completed successfully",
+  },
+];
+
+function findStatus(statusId) {
+  return ORDER_STATUSES.find((status) => status.order_status_id === statusId);
+}
+
+function staticCatalogResponse(res) {
+  return res.status(410).json({
+    error: "Order status catalog is static in the PostgreSQL schema",
+    message: "Update orders.order_status through order routes and keep numeric mappings in docs/db-contract-postgres.md.",
+    statuses: ORDER_STATUSES,
+  });
+}
+
+router.get("/", async (req, res) => {
+  res.json(ORDER_STATUSES);
 });
 
-/**
- * @route   GET /api/order-status/:id
- * @desc    Lấy thông tin một trạng thái đơn hàng
- * @access  Private
- */
-router.get('/:id', async (req, res) => {
-  try {
-    const statusId = Number(req.params.id);
-    if (isNaN(statusId)) {
-      return res.status(400).json({ error: 'Invalid status ID' });
-    }
-
-    const [statuses] = await db.query('SELECT * FROM order_status WHERE order_status_id = ?', [statusId]);
-    
-    if (statuses.length === 0) {
-      return res.status(404).json({ error: 'Order status not found' });
-    }
-    
-    res.json(statuses[0]);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch order status' });
+router.get("/:id", async (req, res) => {
+  const statusId = Number(req.params.id);
+  if (isNaN(statusId)) {
+    return res.status(400).json({ error: "Invalid status ID" });
   }
+
+  const status = findStatus(statusId);
+  if (!status) {
+    return res.status(404).json({ error: "Order status not found" });
+  }
+
+  return res.json(status);
 });
 
-/**
- * @route   POST /api/order-status
- * @desc    Tạo trạng thái đơn hàng mới
- * @access  Private (Admin only)
- */
-router.post('/', verifyToken, isAdmin, async (req, res) => {
-  try {
-    const { name, description, color } = req.body;
-    
-    if (!name) {
-      return res.status(400).json({ error: 'Status name is required' });
-    }
-    
-    // Kiểm tra tên trạng thái đã tồn tại chưa
-    const [existingStatuses] = await db.query('SELECT order_status_id FROM order_status WHERE order_status_name = ?', [name]);
-    
-    if (existingStatuses.length > 0) {
-      return res.status(400).json({ error: 'Status name already exists' });
-    }
-    
-    const [result] = await db.query(
-      'INSERT INTO order_status (order_status_name, order_status_color) VALUES (?, ?)',
-      [name, color || '#808080']
-    );
-    
-    const [newStatus] = await db.query('SELECT * FROM order_status WHERE order_status_id = ?', [result.insertId]);
-    
-    res.status(201).json({
-      message: 'Order status created successfully',
-      status: newStatus[0]
-    });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to create order status' });
-  }
-});
+router.post("/", verifyToken, isAdmin, async (req, res) => staticCatalogResponse(res));
 
-/**
- * @route   PUT /api/order-status/:id
- * @desc    Cập nhật thông tin trạng thái đơn hàng
- * @access  Private (Admin only)
- */
-router.put('/:id', verifyToken, isAdmin, async (req, res) => {
-  try {
-    const statusId = Number(req.params.id);
-    if (isNaN(statusId)) {
-      return res.status(400).json({ error: 'Invalid status ID' });
-    }
-    
-    const { name, color } = req.body;
-    
-    // Kiểm tra trạng thái tồn tại
-    const [existingStatus] = await db.query('SELECT order_status_id FROM order_status WHERE order_status_id = ?', [statusId]);
-    
-    if (existingStatus.length === 0) {
-      return res.status(404).json({ error: 'Order status not found' });
-    }
-    
-    // Kiểm tra tên mới có trùng với trạng thái khác không
-    if (name) {
-      const [duplicateName] = await db.query(
-        'SELECT order_status_id FROM order_status WHERE order_status_name = ? AND order_status_id != ?',
-        [name, statusId]
-      );
-      
-      if (duplicateName.length > 0) {
-        return res.status(400).json({ error: 'Status name already exists' });
-      }
-    }
-    
-    const updates = [];
-    const values = [];
-    
-    if (name !== undefined) {
-      updates.push('order_status_name = ?');
-      values.push(name);
-    }
-    
-    if (color !== undefined) {
-      updates.push('order_status_color = ?');
-      values.push(color);
-    }
-    
-    if (updates.length === 0) {
-      return res.status(400).json({ error: 'No update data provided' });
-    }
-    
-    values.push(statusId);
-    
-    await db.query(
-      `UPDATE order_status SET ${updates.join(', ')} WHERE order_status_id = ?`,
-      values
-    );
-    
-    const [updatedStatus] = await db.query('SELECT * FROM order_status WHERE order_status_id = ?', [statusId]);
-    
-    res.json({
-      message: 'Order status updated successfully',
-      status: updatedStatus[0]
-    });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to update order status' });
-  }
-});
+router.put("/:id", verifyToken, isAdmin, async (req, res) => staticCatalogResponse(res));
 
-/**
- * @route   DELETE /api/order-status/:id
- * @desc    Xóa trạng thái đơn hàng
- * @access  Private (Admin only)
- */
-router.delete('/:id', verifyToken, isAdmin, async (req, res) => {
-  try {
-    const statusId = Number(req.params.id);
-    if (isNaN(statusId)) {
-      return res.status(400).json({ error: 'Invalid status ID' });
-    }
-    
-    // Kiểm tra trạng thái tồn tại
-    const [existingStatus] = await db.query('SELECT order_status_id FROM order_status WHERE order_status_id = ?', [statusId]);
-    
-    if (existingStatus.length === 0) {
-      return res.status(404).json({ error: 'Order status not found' });
-    }
-    
-    // Kiểm tra xem có đơn hàng nào đang sử dụng trạng thái này không
-    const [usingOrders] = await db.query('SELECT COUNT(*) as count FROM `orders` WHERE order_status_id = ?', [statusId]);
-    
-    if (usingOrders[0].count > 0) {
-      return res.status(400).json({
-        error: 'Cannot delete status because it is being used by orders',
-        orderCount: usingOrders[0].count
-      });
-    }
-    
-    // Xóa trạng thái
-    await db.query('DELETE FROM order_status WHERE order_status_id = ?', [statusId]);
-    
-    res.json({ message: 'Order status deleted successfully' });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to delete order status' });
-  }
-});
+router.delete("/:id", verifyToken, isAdmin, async (req, res) => staticCatalogResponse(res));
 
-module.exports = router; 
+module.exports = router;

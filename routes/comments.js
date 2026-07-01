@@ -1,58 +1,91 @@
-
 const express = require("express");
 const router = express.Router();
 const db = require("../config/database");
-const { verifyToken, isAdmin } = require("../middleware/auth");
+const { verifyToken } = require("../middleware/auth");
+const { withTransaction } = require("../db/transaction");
+
+const COMMENT_PRODUCT_JOINS = `
+  LEFT JOIN order_items oi ON c.order_item_id = oi.order_item_id
+  LEFT JOIN variant_product vp ON oi.variant_id = vp.variant_id
+  LEFT JOIN product p ON vp.product_id = p.product_id
+`;
 
 /**
  * @route   GET /api/comments
- * @desc    Lấy danh sách bình luận/đánh giá
+ * @desc    Lay danh sach binh luan/danh gia
  * @access  Public
  */
 router.get("/", async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 10;
     const offset = (page - 1) * limit;
+    const productId = req.query.product_id ? Number(req.query.product_id) : null;
 
-    // Lọc theo sản phẩm nếu có
-    const productFilter = req.query.product_id
-      ? `WHERE c.product_id = ${Number(req.query.product_id)}`
-      : "";
+    if (productId !== null && !Number.isInteger(productId)) {
+      return res.status(400).json({ error: "Invalid product ID" });
+    }
 
-    // Đếm tổng số bình luận
-    const [countResult] = await db.query(`
-      SELECT COUNT(*) as total 
-      FROM comment
-      ${productFilter.replace("c.", "")}
-    `);
+    const whereClauses = ["c.deleted_at IS NULL"];
+    const params = [];
+    if (productId !== null) {
+      params.push(productId);
+      whereClauses.push(`vp.product_id = $${params.length}`);
+    }
 
-    const totalComments = countResult[0].total;
+    const whereSql = whereClauses.join(" AND ");
+
+    const { rows: countRows } = await db.query(
+      `
+      SELECT COUNT(*)::int AS total
+      FROM comment c
+      ${COMMENT_PRODUCT_JOINS}
+      WHERE ${whereSql}
+      `,
+      params
+    );
+    const totalComments = Number(countRows[0]?.total || 0);
     const totalPages = Math.ceil(totalComments / limit);
 
-    // Lấy danh sách bình luận - removed users table join
-    const [comments] = await db.query(
+    const listParams = [...params, limit, offset];
+    const limitIndex = `$${params.length + 1}`;
+    const offsetIndex = `$${params.length + 2}`;
+
+    const { rows: comments } = await db.query(
       `
-      SELECT 
-        c.*,
-        p.product_name
+      SELECT
+        c.comment_id,
+        c.user_id,
+        c.order_item_id,
+        c.comment_content,
+        c.comment_rating,
+        c.comment_image,
+        c.comment_status,
+        c.created_at,
+        c.updated_at,
+        c.deleted_at,
+        p.product_id,
+        p.product_name,
+        p.product_slug
       FROM comment c
-      LEFT JOIN product p ON c.product_id = p.product_id
-      ${productFilter}
+      ${COMMENT_PRODUCT_JOINS}
+      WHERE ${whereSql}
       ORDER BY c.created_at DESC
-      LIMIT ?, ?
-    `,
-      [offset, limit]
+      LIMIT ${limitIndex} OFFSET ${offsetIndex}
+      `,
+      listParams
     );
 
-    // Add a placeholder for user_name since the users table doesn't exist
-    const commentsWithPlaceholder = comments.map((comment) => ({
-      ...comment,
-      user_name: `User ${comment.user_id}`,
+    const normalized = comments.map((c) => ({
+      ...c,
+      comment_title: null,
+      comment_description: c.comment_content,
+      comment_reaction: null,
+      user_name: `User ${c.user_id}`,
     }));
 
-    res.json({
-      comments: commentsWithPlaceholder,
+    return res.json({
+      comments: normalized,
       pagination: {
         currentPage: page,
         totalPages,
@@ -61,61 +94,63 @@ router.get("/", async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch comments" });
+    return res.status(500).json({ error: "Failed to fetch comments" });
   }
 });
+
 /**
- * GET /api/admin/comments
- * Lấy tất cả bình luận + thông tin user, sản phẩm, đơn hàng
+ * @route   GET /api/comments/admin
+ * @desc    Lay tat ca binh luan cho admin
+ * @access  Private
  */
 router.get("/admin", async (req, res) => {
-  // Thêm verifyToken và isAdmin nếu bạn muốn bảo vệ route này
   try {
-    const [rows] = await db.query(`
-      SELECT 
+    const { rows } = await db.query(`
+      SELECT
         c.comment_id,
         u.user_name,
         p.product_name,
         o.order_hash,
         c.comment_rating,
-        c.comment_title,
-        c.comment_description,
-        c.comment_reaction,
+        NULL::text AS comment_title,
+        c.comment_content AS comment_description,
+        NULL::int AS comment_reaction,
         c.comment_status,
         c.created_at,
         c.updated_at,
         c.deleted_at,
-        c.user_id,         
-        c.order_item_id,  
-        c.product_id    
+        c.user_id,
+        c.order_item_id,
+        p.product_id
       FROM comment c
-      LEFT JOIN user u ON c.user_id = u.user_id
-      LEFT JOIN product p ON c.product_id = p.product_id
+      LEFT JOIN "user" u ON c.user_id = u.user_id
       LEFT JOIN order_items oi ON c.order_item_id = oi.order_item_id
       LEFT JOIN orders o ON oi.order_id = o.order_id
+      LEFT JOIN variant_product vp ON oi.variant_id = vp.variant_id
+      LEFT JOIN product p ON vp.product_id = p.product_id
       WHERE c.deleted_at IS NULL
       ORDER BY c.created_at DESC
     `);
 
-    res.json(rows);
+    return res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: "Lỗi máy chủ khi lấy bình luận" });
+    return res.status(500).json({ error: "Loi may chu khi lay binh luan" });
   }
 });
+
 router.put("/:comment_id/status", async (req, res) => {
   try {
     const commentId = Number(req.params.comment_id);
-    if (isNaN(commentId)) {
+    if (!Number.isInteger(commentId)) {
       return res.status(400).json({ error: "Invalid comment ID" });
     }
 
-    const { status, deleted } = req.body; // 'status' có thể là 0 (ẩn) hoặc 1 (hiển thị)
-
-    const [comments] = await db.query(
-      "SELECT * FROM comment WHERE comment_id = ?",
+    const { status, deleted } = req.body;
+    const { rows: comments } = await db.query(
+      "SELECT comment_id FROM comment WHERE comment_id = $1",
       [commentId]
     );
-    if (comments.length === 0) {
+    if (!comments.length) {
       return res.status(404).json({ error: "Comment not found" });
     }
 
@@ -123,179 +158,187 @@ router.put("/:comment_id/status", async (req, res) => {
     const values = [];
 
     if (status !== undefined) {
-      // Giả định cột trạng thái trong bảng 'comment' là 'comment_status'
-      updates.push("comment_status = ?");
       values.push(status);
+      updates.push(`comment_status = $${values.length}`);
     }
 
     if (deleted !== undefined) {
-      updates.push("deleted_at = ?");
-      values.push(deleted ? new Date() : null); // Xóa mềm (đặt timestamp) hoặc bỏ xóa mềm (đặt NULL)
+      values.push(deleted ? new Date() : null);
+      updates.push(`deleted_at = $${values.length}`);
     }
 
-    updates.push("updated_at = NOW()"); // Luôn cập nhật thời gian cập nhật
+    updates.push("updated_at = NOW()");
 
-    if (updates.length === 1 && updates[0] === "updated_at = NOW()") {
+    if (updates.length === 1) {
       return res.status(400).json({ error: "No update data provided" });
     }
 
     values.push(commentId);
-
     await db.query(
-      `UPDATE comment SET ${updates.join(", ")} WHERE comment_id = ?`,
+      `UPDATE comment SET ${updates.join(", ")} WHERE comment_id = $${
+        values.length
+      }`,
       values
     );
 
-    const [updatedComment] = await db.query(
-      `SELECT * FROM comment WHERE comment_id = ?`,
+    const { rows: updated } = await db.query(
+      "SELECT * FROM comment WHERE comment_id = $1",
       [commentId]
     );
-    res.json({
+
+    return res.json({
       message: "Comment updated successfully",
-      comment: updatedComment[0],
+      comment: updated[0],
     });
   } catch (error) {
-    res.status(500).json({ error: "Failed to update comment status" });
+    return res.status(500).json({ error: "Failed to update comment status" });
   }
 });
+
 /**
  * @route   GET /api/comments/:id
- * @desc    Lấy chi tiết bình luận
+ * @desc    Lay chi tiet binh luan
  * @access  Public
  */
 router.get("/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
-    if (isNaN(id)) {
+    if (!Number.isInteger(id)) {
       return res.status(400).json({ error: "Invalid comment ID" });
     }
 
-    // Removed users table join
-    const [comments] = await db.query(
+    const { rows } = await db.query(
       `
-      SELECT 
+      SELECT
         c.*,
-        p.product_name
+        p.product_id,
+        p.product_name,
+        p.product_slug
       FROM comment c
-      LEFT JOIN product p ON c.product_id = p.product_id
-      WHERE c.id = ?
-    `,
+      LEFT JOIN order_items oi ON c.order_item_id = oi.order_item_id
+      LEFT JOIN variant_product vp ON oi.variant_id = vp.variant_id
+      LEFT JOIN product p ON vp.product_id = p.product_id
+      WHERE c.comment_id = $1
+      `,
       [id]
     );
 
-    if (comments.length === 0) {
+    if (!rows.length) {
       return res.status(404).json({ error: "Comment not found" });
     }
 
-    // Add a placeholder for user_name
-    const comment = {
-      ...comments[0],
-      user_name: `User ${comments[0].user_id}`,
-    };
-
-    res.json(comment);
+    return res.json({
+      ...rows[0],
+      comment_title: null,
+      comment_description: rows[0].comment_content,
+      user_name: `User ${rows[0].user_id}`,
+    });
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch comment" });
+    return res.status(500).json({ error: "Failed to fetch comment" });
   }
 });
 
 /**
  * @route   GET /api/comments/product/:productId
- * @desc    Lấy bình luận theo sản phẩm
+ * @desc    Lay binh luan theo san pham
  * @access  Public
  */
 router.get("/product/:productId", async (req, res) => {
   try {
     const productId = Number(req.params.productId);
-    if (isNaN(productId)) {
+    if (!Number.isInteger(productId)) {
       return res.status(400).json({ error: "Invalid product ID" });
     }
 
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 5;
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 5;
     const offset = (page - 1) * limit;
 
-    // Kiểm tra sản phẩm tồn tại
-    const [products] = await db.query(
-      "SELECT product_id FROM product WHERE product_id = ?",
+    const { rows: products } = await db.query(
+      "SELECT product_id FROM product WHERE product_id = $1",
       [productId]
     );
-    if (products.length === 0) {
+    if (!products.length) {
       return res.status(404).json({ error: "Product not found" });
     }
 
-    // Tổng số bình luận
-    const [[countResult]] = await db.query(
-      "SELECT COUNT(*) as total FROM comment WHERE product_id = ?",
+    const { rows: countRows } = await db.query(
+      `
+      SELECT COUNT(*)::int AS total
+      FROM comment c
+      JOIN order_items oi ON c.order_item_id = oi.order_item_id
+      JOIN variant_product vp ON oi.variant_id = vp.variant_id
+      WHERE vp.product_id = $1 AND c.deleted_at IS NULL
+      `,
       [productId]
     );
-
-    const totalComments = countResult.total;
+    const totalComments = Number(countRows[0]?.total || 0);
     const totalPages = Math.ceil(totalComments / limit);
 
-    // Lấy thông tin tổng hợp đánh giá
-    const [[ratingStats]] = await db.query(
+    const { rows: ratingRows } = await db.query(
       `
-        SELECT 
-          ROUND(AVG(comment_rating), 1) as average_rating,
-          COUNT(*) as total_ratings,
-          SUM(CASE WHEN comment_rating = 5 THEN 1 ELSE 0 END) as five_star,
-          SUM(CASE WHEN comment_rating = 4 THEN 1 ELSE 0 END) as four_star,
-          SUM(CASE WHEN comment_rating = 3 THEN 1 ELSE 0 END) as three_star,
-          SUM(CASE WHEN comment_rating = 2 THEN 1 ELSE 0 END) as two_star,
-          SUM(CASE WHEN comment_rating = 1 THEN 1 ELSE 0 END) as one_star
-        FROM comment
-        WHERE product_id = ?
-        `,
+      SELECT
+        ROUND(AVG(c.comment_rating)::numeric, 1) AS average_rating,
+        COUNT(*)::int AS total_ratings,
+        SUM(CASE WHEN c.comment_rating = 5 THEN 1 ELSE 0 END)::int AS five_star,
+        SUM(CASE WHEN c.comment_rating = 4 THEN 1 ELSE 0 END)::int AS four_star,
+        SUM(CASE WHEN c.comment_rating = 3 THEN 1 ELSE 0 END)::int AS three_star,
+        SUM(CASE WHEN c.comment_rating = 2 THEN 1 ELSE 0 END)::int AS two_star,
+        SUM(CASE WHEN c.comment_rating = 1 THEN 1 ELSE 0 END)::int AS one_star
+      FROM comment c
+      JOIN order_items oi ON c.order_item_id = oi.order_item_id
+      JOIN variant_product vp ON oi.variant_id = vp.variant_id
+      WHERE vp.product_id = $1 AND c.deleted_at IS NULL
+      `,
       [productId]
     );
+    const ratingStats = ratingRows[0] || {};
 
-    // Lấy danh sách bình luận kèm user
-    const [comments] = await db.query(
+    const { rows: comments } = await db.query(
       `
-        SELECT 
-          c.comment_id,
-          c.comment_title, 
-          c.comment_description,
-          c.comment_rating,
-          c.created_at,
-          u.user_id,
-          c.comment_reaction, 
-          u.user_name,
-          u.user_image
-        FROM comment c
-        JOIN user u ON c.user_id = u.user_id
-        WHERE c.product_id = ?
-        ORDER BY c.created_at DESC
-        LIMIT ?, ?
-        `,
-      [productId, offset, limit]
+      SELECT
+        c.comment_id,
+        c.comment_content,
+        c.comment_rating,
+        c.comment_status,
+        c.created_at,
+        c.user_id,
+        u.user_name,
+        u.user_image
+      FROM comment c
+      JOIN "user" u ON c.user_id = u.user_id
+      JOIN order_items oi ON c.order_item_id = oi.order_item_id
+      JOIN variant_product vp ON oi.variant_id = vp.variant_id
+      WHERE vp.product_id = $1 AND c.deleted_at IS NULL
+      ORDER BY c.created_at DESC
+      LIMIT $2 OFFSET $3
+      `,
+      [productId, limit, offset]
     );
 
-    // Trả về JSON
-    res.json({
+    return res.json({
       product_id: productId,
       stats: {
-        average_rating: ratingStats.average_rating || 0,
-        total_ratings: ratingStats.total_ratings || 0,
+        average_rating: Number(ratingStats.average_rating || 0),
+        total_ratings: Number(ratingStats.total_ratings || 0),
         rating_breakdown: {
-          five_star: ratingStats.five_star || 0,
-          four_star: ratingStats.four_star || 0,
-          three_star: ratingStats.three_star || 0,
-          two_star: ratingStats.two_star || 0,
-          one_star: ratingStats.one_star || 0,
+          five_star: Number(ratingStats.five_star || 0),
+          four_star: Number(ratingStats.four_star || 0),
+          three_star: Number(ratingStats.three_star || 0),
+          two_star: Number(ratingStats.two_star || 0),
+          one_star: Number(ratingStats.one_star || 0),
         },
       },
-      comments: comments.map((comment) => ({
-        comment_id: comment.comment_id,
-        user_id: comment.user_id,
-        user_name: comment.user_name,
-        user_image: comment.user_image,
-        comment_title: comment.comment_title,
-        comment_description: comment.comment_description,
-        comment_rating: comment.comment_rating,
-        comment_reaction: comment.comment_reaction,
-        created_at: comment.created_at,
+      comments: comments.map((c) => ({
+        comment_id: c.comment_id,
+        user_id: c.user_id,
+        user_name: c.user_name,
+        user_image: c.user_image,
+        comment_title: null,
+        comment_description: c.comment_content,
+        comment_rating: c.comment_rating,
+        comment_reaction: null,
+        created_at: c.created_at,
       })),
       pagination: {
         currentPage: page,
@@ -305,62 +348,62 @@ router.get("/product/:productId", async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch product comments" });
+    return res.status(500).json({ error: "Failed to fetch product comments" });
   }
 });
 
 /**
  * @route   GET /api/comments/user/:userId
- * @desc    Lấy bình luận theo người dùng
+ * @desc    Lay binh luan theo nguoi dung
  * @access  Private
  */
 router.get("/user/:userId", verifyToken, async (req, res) => {
   try {
     const userId = Number(req.params.userId);
-    if (isNaN(userId)) {
+    if (!Number.isInteger(userId)) {
       return res.status(400).json({ error: "Invalid user ID" });
     }
 
-    // Kiểm tra quyền truy cập
     if (!req.user.isAdmin && req.user.id !== userId) {
-      return res
-        .status(403)
-        .json({ error: "Unauthorized access to user comments" });
+      return res.status(403).json({ error: "Unauthorized access to user comments" });
     }
 
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 10;
     const offset = (page - 1) * limit;
 
-    // Đếm tổng số bình luận
-    const [countResult] = await db.query(
-      "SELECT COUNT(*) as total FROM comment WHERE user_id = ?",
+    const { rows: countRows } = await db.query(
+      "SELECT COUNT(*)::int AS total FROM comment WHERE user_id = $1 AND deleted_at IS NULL",
       [userId]
     );
-
-    const totalComments = countResult[0].total;
+    const totalComments = Number(countRows[0]?.total || 0);
     const totalPages = Math.ceil(totalComments / limit);
 
-    // Lấy danh sách bình luận
-    const [comments] = await db.query(
+    const { rows: comments } = await db.query(
       `
-      SELECT 
+      SELECT
         c.*,
-        p.name as product_name,
-        p.slug as product_slug,
-        p.thumbnail as product_thumbnail
+        p.product_name,
+        p.product_slug,
+        p.product_image AS product_thumbnail
       FROM comment c
-      LEFT JOIN product p ON c.product_id = p.id
-      WHERE c.user_id = ?
+      LEFT JOIN order_items oi ON c.order_item_id = oi.order_item_id
+      LEFT JOIN variant_product vp ON oi.variant_id = vp.variant_id
+      LEFT JOIN product p ON vp.product_id = p.product_id
+      WHERE c.user_id = $1 AND c.deleted_at IS NULL
       ORDER BY c.created_at DESC
-      LIMIT ?, ?
-    `,
-      [userId, offset, limit]
+      LIMIT $2 OFFSET $3
+      `,
+      [userId, limit, offset]
     );
 
-    res.json({
+    return res.json({
       user_id: userId,
-      comments,
+      comments: comments.map((c) => ({
+        ...c,
+        comment_title: null,
+        comment_description: c.comment_content,
+      })),
       pagination: {
         currentPage: page,
         totalPages,
@@ -369,402 +412,316 @@ router.get("/user/:userId", verifyToken, async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch user comments" });
+    return res.status(500).json({ error: "Failed to fetch user comments" });
   }
 });
 
 /**
  * @route   POST /api/comments
- * @desc    Tạo bình luận/đánh giá mới cho một order_item
- * @access  Private (Yêu cầu đăng nhập)
+ * @desc    Tao binh luan danh gia cho order_item
+ * @access  Private
  */
-
 router.post("/", verifyToken, async (req, res) => {
-  const {
-    order_item_id,
-    comment_title,
-    comment_description,
-    comment_rating,
-    // images, // Nếu bạn muốn thêm trường images, hãy bỏ comment và xử lý nó
-  } = req.body;
-  const user_id = req.user.id; // Lấy user_id từ token xác thực
-
-  let connection; // Khai báo biến connection để dùng trong finally block
+  const { order_item_id, comment_title, comment_description, comment_rating } =
+    req.body;
+  const userId = req.user.id;
 
   try {
-    // --- 1. Xác thực (Validation) dữ liệu đầu vào ---
-    if (
-      !order_item_id ||
-      !comment_title ||
-      !comment_description ||
-      !comment_rating
-    ) {
+    if (!order_item_id || !comment_description || !comment_rating) {
       return res.status(400).json({
-        error:
-          "Vui lòng cung cấp đầy đủ ID sản phẩm trong đơn hàng, tiêu đề, mô tả và điểm đánh giá.",
+        error: "Missing required fields: order_item_id, comment_description, comment_rating",
       });
     }
 
-    if (
-      isNaN(Number(comment_rating)) ||
-      Number(comment_rating) < 1 ||
-      Number(comment_rating) > 5
-    ) {
-      return res
-        .status(400)
-        .json({ error: "Điểm đánh giá phải là số từ 1 đến 5." });
+    const rating = Number(comment_rating);
+    if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
+      return res.status(400).json({ error: "Rating must be between 1 and 5" });
     }
 
-    connection = await db.getConnection(); // Lấy một kết nối từ pool
-    await connection.beginTransaction(); // Bắt đầu transaction
-
-    // --- 2. Kiểm tra điều kiện đánh giá (Quan trọng!) ---
-    // Giữ nguyên alias ở đây để tránh lỗi ambiguous nếu có nhiều bảng có cột trùng tên
-    // trong các JOIN phức tạp như thế này.
-    const [orderItemInfo] = await connection.query(
-      `
-            SELECT
-                order_items.order_item_id,
-                order_items.comment_id AS existing_comment_id,
-                orders.current_status AS order_status,
-                orders.user_id AS order_user_id,
-                variant_product.product_id AS linked_product_id,
-                order_items.product_name
-            FROM
-                order_items
-            JOIN
-                orders ON order_items.order_id = orders.order_id
-            JOIN
-                variant_product ON order_items.variant_id = variant_product.variant_id
-            WHERE
-                order_items.order_item_id = ?
-            LIMIT 1
-            `,
-      [order_item_id]
-    );
-
-    if (orderItemInfo.length === 0) {
-      await connection.rollback();
-      return res
-        .status(404)
-        .json({ error: "Không tìm thấy sản phẩm trong đơn hàng này." });
-    }
-
-    const item = orderItemInfo[0];
-    const product_id_from_item = item.linked_product_id;
-
-    if (item.order_user_id !== user_id) {
-      await connection.rollback();
-      return res
-        .status(403)
-        .json({ error: "Bạn không có quyền đánh giá sản phẩm này." });
-    }
-
-    if (item.order_status !== "SUCCESS") {
-      await connection.rollback();
-      return res.status(400).json({
-        error:
-          "Đơn hàng chứa sản phẩm này chưa được giao thành công hoặc chưa hoàn tất.",
-      });
-    }
-
-    if (item.existing_comment_id !== null) {
-      await connection.rollback();
-      return res
-        .status(400)
-        .json({ error: "Sản phẩm này đã được bạn đánh giá trước đó." });
-    }
-
-    // Giữ nguyên alias ở đây để tránh lỗi ambiguous vì có JOIN nhiều bảng và cột trùng tên.
-    const [existingProductComment] = await connection.query(
-      `
-    SELECT comment.comment_id
-    FROM comment
-    JOIN order_items ON comment.order_item_id = order_items.order_item_id
-    JOIN variant_product ON order_items.variant_id = variant_product.variant_id
-    WHERE comment.user_id = ? AND variant_product.product_id = ?
-    LIMIT 1
-    `,
-      [user_id, product_id_from_item]
-    );
-
-    if (existingProductComment.length > 0) {
-      await connection.rollback();
-      return res.status(400).json({
-        error:
-          "Bạn đã đánh giá sản phẩm này trước đó. Bạn chỉ có thể đánh giá một lần cho mỗi sản phẩm gốc.",
-      });
-    }
-
-    // --- 3. Chèn đánh giá vào bảng `comment` (bỏ alias) ---
-    const [commentResult] = await connection.query(
-      `
-            INSERT INTO comment (
-                order_item_id,
-                user_id,
-                product_id,
-                comment_title,
-                comment_description,
-                comment_rating,
-                created_at,
-                updated_at
-               
-            ) VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
-            `,
-      [
-        order_item_id,
-        user_id,
-        product_id_from_item,
-        comment_title,
-        comment_description,
-        comment_rating,
-        // images ? JSON.stringify(images) : null, // nếu dùng
-        // 0 // nếu dùng comment_reaction
-      ]
-    );
-
-    const newCommentId = commentResult.insertId;
-
-    // --- 4. Cập nhật `comment_id` vào bảng `order_items` (bỏ alias) ---
-    await connection.query(
-      `
-            UPDATE order_items
-            SET comment_id = ?
-            WHERE order_item_id = ?
-            `,
-      [newCommentId, order_item_id]
-    );
-
-    await connection.commit(); // Commit transaction
-
-    // --- 6. Trả về phản hồi (giữ lại alias để đơn giản hóa SELECT * và truy cập cột) ---
-    // Hoặc bạn có thể liệt kê tất cả cột mà không dùng alias nếu muốn, nhưng sẽ dài hơn.
-    const [createdComment] = await connection.query(
-      `
+    const created = await withTransaction(async (client) => {
+      const { rows: orderItemRows } = await client.query(
+        `
         SELECT
-            comment.*, -- Lấy tất cả cột từ bảng comment
-            user.user_name,
-            user.user_image,
-            order_items.product_name AS reviewed_product_name,
-            variant_product.product_id AS reviewed_product_id
-        FROM comment
-        JOIN user ON comment.user_id = user.user_id
-        JOIN order_items ON comment.order_item_id = order_items.order_item_id
-        JOIN variant_product ON order_items.variant_id = variant_product.variant_id
-        WHERE comment.comment_id = ?
+          oi.order_item_id,
+          oi.comment_id AS existing_comment_id,
+          oi.variant_id,
+          o.order_status,
+          o.user_id AS order_user_id,
+          vp.product_id AS linked_product_id
+        FROM order_items oi
+        JOIN orders o ON oi.order_id = o.order_id
+        JOIN variant_product vp ON oi.variant_id = vp.variant_id
+        WHERE oi.order_item_id = $1
+        LIMIT 1
         `,
-      [newCommentId]
-    );
-    res.status(201).json({
-      message: "Đánh giá đã được tạo thành công!",
-      comment: createdComment[0],
+        [order_item_id]
+      );
+
+      if (!orderItemRows.length) {
+        return { notFound: true };
+      }
+
+      const item = orderItemRows[0];
+      if (Number(item.order_user_id) !== Number(userId)) {
+        return { forbidden: true };
+      }
+      if (![3, 4].includes(Number(item.order_status))) {
+        return { badOrderStatus: true };
+      }
+      if (item.existing_comment_id !== null) {
+        return { alreadyCommentedOrderItem: true };
+      }
+
+      const { rows: existingProductComment } = await client.query(
+        `
+        SELECT c.comment_id
+        FROM comment c
+        JOIN order_items oi ON c.order_item_id = oi.order_item_id
+        JOIN variant_product vp ON oi.variant_id = vp.variant_id
+        WHERE c.user_id = $1 AND vp.product_id = $2 AND c.deleted_at IS NULL
+        LIMIT 1
+        `,
+        [userId, item.linked_product_id]
+      );
+      if (existingProductComment.length > 0) {
+        return { alreadyCommentedProduct: true };
+      }
+
+      const { rows: insertRows } = await client.query(
+        `
+        INSERT INTO comment (
+          order_item_id,
+          user_id,
+          comment_content,
+          comment_rating,
+          created_at,
+          updated_at
+        ) VALUES ($1, $2, $3, $4, NOW(), NOW())
+        RETURNING comment_id
+        `,
+        [order_item_id, userId, comment_description, rating]
+      );
+      const newCommentId = insertRows[0].comment_id;
+
+      await client.query(
+        `
+        UPDATE order_items
+        SET comment_id = $1, updated_at = NOW()
+        WHERE order_item_id = $2
+        `,
+        [newCommentId, order_item_id]
+      );
+
+      const { rows: createdRows } = await client.query(
+        `
+        SELECT
+          c.*,
+          u.user_name,
+          u.user_image,
+          vp.product_id AS reviewed_product_id,
+          p.product_name AS reviewed_product_name
+        FROM comment c
+        JOIN "user" u ON c.user_id = u.user_id
+        JOIN order_items oi ON c.order_item_id = oi.order_item_id
+        JOIN variant_product vp ON oi.variant_id = vp.variant_id
+        JOIN product p ON vp.product_id = p.product_id
+        WHERE c.comment_id = $1
+        `,
+        [newCommentId]
+      );
+
+      return {
+        created: createdRows[0],
+      };
+    });
+
+    if (created.notFound) {
+      return res.status(404).json({ error: "Order item not found" });
+    }
+    if (created.forbidden) {
+      return res.status(403).json({ error: "You cannot review this order item" });
+    }
+    if (created.badOrderStatus) {
+      return res.status(400).json({
+        error: "Order item is not in delivered/completed order status",
+      });
+    }
+    if (created.alreadyCommentedOrderItem) {
+      return res.status(400).json({ error: "This order item is already reviewed" });
+    }
+    if (created.alreadyCommentedProduct) {
+      return res.status(400).json({
+        error: "You already reviewed this product from another order item",
+      });
+    }
+
+    return res.status(201).json({
+      message: "Comment created successfully",
+      comment: {
+        ...created.created,
+        comment_title: comment_title || null,
+        comment_description: created.created.comment_content,
+      },
     });
   } catch (error) {
-    if (connection) {
-      await connection.rollback();
-    }
-    res.status(500).json({
-      error: "Có lỗi xảy ra khi tạo bình luận.",
+    return res.status(500).json({
+      error: "Failed to create comment",
       details: error.message,
     });
-  } finally {
-    if (connection) {
-      connection.release();
-    }
   }
 });
+
 /**
  * @route   PUT /api/comments/:id
- * @desc    Cập nhật bình luận
+ * @desc    Cap nhat binh luan
  * @access  Private
  */
 router.put("/:id", verifyToken, async (req, res) => {
   try {
-    const id = Number(req.params.id);
-    if (isNaN(id)) {
+    const commentId = Number(req.params.id);
+    if (!Number.isInteger(commentId)) {
       return res.status(400).json({ error: "Invalid comment ID" });
     }
 
     const { content, rating, images } = req.body;
 
-    // Kiểm tra bình luận tồn tại
-    const [comments] = await db.query("SELECT * FROM comment WHERE id = ?", [
-      id,
-    ]);
-
-    if (comments.length === 0) {
+    const { rows: comments } = await db.query(
+      "SELECT * FROM comment WHERE comment_id = $1",
+      [commentId]
+    );
+    if (!comments.length) {
       return res.status(404).json({ error: "Comment not found" });
     }
-
     const comment = comments[0];
-    const product_id = comment.product_id;
 
-    // Kiểm tra quyền truy cập
     if (!req.user.isAdmin && req.user.id !== comment.user_id) {
-      return res
-        .status(403)
-        .json({ error: "You can only update your own comments" });
+      return res.status(403).json({ error: "You can only update your own comments" });
     }
 
-    // Kiểm tra giá trị đánh giá hợp lệ
     if (
-      rating &&
-      (isNaN(Number(rating)) || Number(rating) < 1 || Number(rating) > 5)
+      rating !== undefined &&
+      (!Number.isFinite(Number(rating)) || Number(rating) < 1 || Number(rating) > 5)
     ) {
-      return res
-        .status(400)
-        .json({ error: "Rating must be a number between 1 and 5" });
+      return res.status(400).json({ error: "Rating must be a number between 1 and 5" });
     }
 
-    // Cập nhật bình luận
     const updates = [];
     const values = [];
 
     if (content !== undefined) {
-      updates.push("content = ?");
       values.push(content);
+      updates.push(`comment_content = $${values.length}`);
     }
-
     if (rating !== undefined) {
-      updates.push("rating = ?");
-      values.push(rating);
+      values.push(Number(rating));
+      updates.push(`comment_rating = $${values.length}`);
     }
-
     if (images !== undefined) {
-      updates.push("images = ?");
       values.push(images ? JSON.stringify(images) : null);
+      updates.push(`comment_image = $${values.length}`);
     }
 
     updates.push("updated_at = NOW()");
-
-    if (updates.length === 1 && updates[0] === "updated_at = NOW()") {
+    if (updates.length === 1) {
       return res.status(400).json({ error: "No update data provided" });
     }
 
-    values.push(id);
-
+    values.push(commentId);
     await db.query(
-      `UPDATE comment SET ${updates.join(", ")} WHERE id = ?`,
+      `UPDATE comment SET ${updates.join(", ")} WHERE comment_id = $${
+        values.length
+      }`,
       values
     );
 
-    // After update, get the updated comment without users table join
-    const [updatedComment] = await db.query(
-      `
-      SELECT c.*
-      FROM comment c
-      WHERE c.id = ?
-    `,
-      [id]
+    const { rows: updatedRows } = await db.query(
+      "SELECT * FROM comment WHERE comment_id = $1",
+      [commentId]
     );
+    const updated = updatedRows[0];
 
-    // Add placeholder for user data
-    const commentWithPlaceholder = {
-      ...updatedComment[0],
-      user_name: `User ${updatedComment[0].user_id}`,
-      user_avatar: null,
-    };
-
-    // Cập nhật số sao đánh giá trung bình của sản phẩm
-    await db.query(
-      `
-      UPDATE product 
-      SET 
-        rating_count = (SELECT COUNT(*) FROM comment WHERE product_id = ? AND rating IS NOT NULL),
-        rating_average = (SELECT AVG(rating) FROM comment WHERE product_id = ? AND rating IS NOT NULL)
-      WHERE id = ?
-    `,
-      [product_id, product_id, product_id]
-    );
-
-    res.json({
+    return res.json({
       message: "Comment updated successfully",
-      comment: commentWithPlaceholder,
+      comment: {
+        ...updated,
+        comment_title: null,
+        comment_description: updated.comment_content,
+        user_name: `User ${updated.user_id}`,
+        user_avatar: null,
+      },
     });
   } catch (error) {
-    res.status(500).json({ error: "Failed to update comment" });
+    return res.status(500).json({ error: "Failed to update comment" });
   }
 });
 
 /**
  * @route   DELETE /api/comments/:id
- * @desc    Xóa bình luận
+ * @desc    Xoa mem binh luan
  * @access  Private
  */
 router.delete("/:id", verifyToken, async (req, res) => {
   try {
-    const id = Number(req.params.id);
-    if (isNaN(id)) {
+    const commentId = Number(req.params.id);
+    if (!Number.isInteger(commentId)) {
       return res.status(400).json({ error: "Invalid comment ID" });
     }
 
-    // Kiểm tra bình luận tồn tại
-    const [comments] = await db.query("SELECT * FROM comment WHERE id = ?", [
-      id,
-    ]);
-
-    if (comments.length === 0) {
+    const { rows: comments } = await db.query(
+      "SELECT * FROM comment WHERE comment_id = $1",
+      [commentId]
+    );
+    if (!comments.length) {
       return res.status(404).json({ error: "Comment not found" });
     }
 
     const comment = comments[0];
-    const product_id = comment.product_id;
-
-    // Kiểm tra quyền truy cập
     if (!req.user.isAdmin && req.user.id !== comment.user_id) {
-      return res
-        .status(403)
-        .json({ error: "You can only delete your own comments" });
+      return res.status(403).json({ error: "You can only delete your own comments" });
     }
 
-    // Xóa mềm bình luận
-    await db.query("UPDATE comment SET deleted_at = NOW() WHERE id = ?", [id]);
-
-    // Cập nhật số sao đánh giá trung bình của sản phẩm
     await db.query(
-      `
-      UPDATE product 
-      SET 
-        rating_count = (SELECT COUNT(*) FROM comment WHERE product_id = ? AND rating IS NOT NULL),
-        rating_average = (SELECT AVG(rating) FROM comment WHERE product_id = ? AND rating IS NOT NULL)
-      WHERE id = ?
-    `,
-      [product_id, product_id, product_id]
+      "UPDATE comment SET deleted_at = NOW(), updated_at = NOW() WHERE comment_id = $1",
+      [commentId]
     );
 
-    res.json({ message: "Comment deleted successfully" });
+    return res.json({ message: "Comment deleted successfully" });
   } catch (error) {
-    res.status(500).json({ error: "Failed to delete comment" });
+    return res.status(500).json({ error: "Failed to delete comment" });
   }
 });
 
-// API toggle status (ẩn/hiện) bình luận
+// Toggle status an/hien comment
 router.put("/:id/toggle-status", async (req, res) => {
   try {
     const commentId = Number(req.params.id);
-    if (isNaN(commentId)) {
+    if (!Number.isInteger(commentId)) {
       return res.status(400).json({ error: "Invalid comment ID" });
     }
-    const [comments] = await db.query(
-      "SELECT comment_status FROM comment WHERE comment_id = ?",
+
+    const { rows: comments } = await db.query(
+      "SELECT comment_status FROM comment WHERE comment_id = $1",
       [commentId]
     );
-    if (comments.length === 0) {
+    if (!comments.length) {
       return res.status(404).json({ error: "Comment not found" });
     }
-    const currentStatus = comments[0].comment_status;
+
+    const currentStatus = Number(comments[0].comment_status || 0);
     const newStatus = currentStatus === 1 ? 0 : 1;
+
     await db.query(
-      "UPDATE comment SET comment_status = ?, updated_at = NOW() WHERE comment_id = ?",
+      "UPDATE comment SET comment_status = $1, updated_at = NOW() WHERE comment_id = $2",
       [newStatus, commentId]
     );
-    res.json({
+
+    return res.json({
       message: "Comment status updated",
       comment_id: commentId,
       status: newStatus,
     });
   } catch (error) {
-    res.status(500).json({ error: "Failed to toggle comment status" });
+    return res.status(500).json({ error: "Failed to toggle comment status" });
   }
 });
 

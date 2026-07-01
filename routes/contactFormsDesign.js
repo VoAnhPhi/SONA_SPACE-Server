@@ -3,12 +3,50 @@ const router = express.Router();
 const db = require("../config/database");
 const { verifyToken, isAdmin } = require("../middleware/auth");
 const { sendEmail } = require("../services/mailService");
-const isAdminRole = (req) => req.user?.role?.toLowerCase?.() === "admin";
+
 const isStaffRole = (req) => req.user?.role?.toLowerCase?.() === "staff";
+
+const CONTACT_FORM_STATUSES = [
+  "NEW",
+  "PENDING",
+  "IN_PROGRESS",
+  "DEPOSIT",
+  "RESOLVED",
+  "REJECTED",
+];
+
+const VALID_STATUS_TRANSITIONS = {
+  PENDING: ["IN_PROGRESS"],
+  IN_PROGRESS: ["DEPOSIT"],
+  DEPOSIT: ["RESOLVED", "REJECTED"],
+};
+
+function parsePositiveInt(value, fallback) {
+  const parsed = Number.parseInt(value, 10);
+  if (Number.isInteger(parsed) && parsed > 0) {
+    return parsed;
+  }
+
+  return fallback;
+}
+
+function parseId(value) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isInteger(parsed) ? parsed : null;
+}
+
+function toNullableNumber(value) {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : Number.NaN;
+}
 
 /**
  * @route   POST /api/contact-forms
- * @desc    Gửi form liên hệ
+ * @desc    Gui form lien he
  * @access  Public
  */
 router.post("/", async (req, res) => {
@@ -27,66 +65,88 @@ router.post("/", async (req, res) => {
       design_fee,
     } = req.body;
 
-    // Kiểm tra các trường bắt buộc
     if (!name || !email || !design_description) {
       return res
         .status(400)
         .json({ error: "Name, email, and design description are required" });
     }
 
-    // Kiểm tra định dạng email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       return res.status(400).json({ error: "Invalid email format" });
     }
 
-    // Kiểm tra form trùng lặp ( email, phone, name ) Nếu form này đã được xử lý thì sẽ được gửi lại
-    const [checkDuplicate] = await db.query(
-      `SELECT * FROM contact_form_design
-       WHERE status IN ('NEW', 'PENDING', 'IN_PROGRESS')
-       AND created_at > NOW() - INTERVAL 1 DAY
-       AND (email = ? OR phone = ? OR name = ?)`,
-      [email, phone, name]
+    const { rows: duplicateRows } = await db.query(
+      `
+      SELECT contact_form_design_id
+      FROM contact_form_design
+      WHERE status IN ($1, $2, $3)
+        AND created_at > NOW() - INTERVAL '1 day'
+        AND (email = $4 OR phone = $5 OR name = $6)
+      `,
+      ["NEW", "PENDING", "IN_PROGRESS", email, phone || null, name]
     );
 
-    if (checkDuplicate.length > 0) {
+    if (duplicateRows.length > 0) {
       return res
         .status(400)
-        .json({ error: "Đang có form đang xử lý với thông tin trùng lặp" });
+        .json({ error: "Dang co form dang xu ly voi thong tin trung lap" });
     }
 
-    // Lưu form liên hệ vào database Mặc định default sẽ là PENDING
-    const [result] = await db.query(
+    const insertColumns = [
+      "name",
+      "email",
+      "phone",
+      "room_name",
+      "design_description",
+      "require_design",
+      "style_design",
+      "budget",
+      "different_information",
+      "design_fee",
+      "created_at",
+      "updated_at",
+    ];
+
+    const insertValues = [
+      name,
+      email,
+      phone || null,
+      room_name || null,
+      design_description,
+      require_design || null,
+      style_design || null,
+      budget || null,
+      different_information || null,
+      design_fee || null,
+    ];
+
+    if (contact_form_design_id !== undefined && contact_form_design_id !== null && contact_form_design_id !== "") {
+      const customId = parseId(contact_form_design_id);
+      if (!customId) {
+        return res.status(400).json({ error: "Invalid contact_form_design_id" });
+      }
+
+      insertColumns.unshift("contact_form_design_id");
+      insertValues.unshift(customId);
+    }
+
+    const paramPlaceholders = insertValues
+      .map((_, index) => `$${index + 1}`)
+      .join(", ");
+
+    const { rows: insertedRows } = await db.query(
       `
       INSERT INTO contact_form_design (
-        contact_form_design_id,
-        name,
-        email,
-        phone,
-        room_name,
-        design_description,
-        require_design,
-        style_design,
-        budget,
-        different_information,
-        design_fee,
-        created_at,
-        updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
-    `,
-      [
-        contact_form_design_id || null,
-        name,
-        email,
-        phone || null,
-        room_name || null,
-        design_description,
-        require_design || null,
-        style_design || null,
-        budget || null,
-        different_information || null,
-        design_fee || null,
-      ]
+        ${insertColumns.join(", ")}
+      ) VALUES (
+        ${paramPlaceholders},
+        NOW(),
+        NOW()
+      )
+      RETURNING contact_form_design_id
+      `,
+      insertValues
     );
 
     const data = {
@@ -101,61 +161,61 @@ router.post("/", async (req, res) => {
       different_information,
     };
 
-    sendEmail(data.email, "Xác nhận Yêu cầu Tư vấn Thiết kế", data);
-    res.status(200).json({
+    sendEmail(data.email, "Xac nhan Yeu cau Tu van Thiet ke", data);
+
+    return res.status(200).json({
       data,
       success: true,
-      message: "Gửi yêu cầu thành công",
-      contactId: result.insertId,
+      message: "Gui yeu cau thanh cong",
+      contactId: insertedRows[0].contact_form_design_id,
     });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      error: error.message || "Gửi yêu cầu thất bại",
+      error: error.message || "Gui yeu cau that bai",
     });
   }
 });
 
 /**
  * @route   GET /api/contact-forms
- * @desc    Lấy danh sách các form liên hệ
+ * @desc    Lay danh sach cac form lien he
  * @access  Private (Admin only)
  */
 router.get("/", verifyToken, isAdmin, async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
+    const page = parsePositiveInt(req.query.page, 1);
+    const limit = parsePositiveInt(req.query.limit, 10);
     const offset = (page - 1) * limit;
 
     const whereParts = [];
     const params = [];
 
-    // Lọc theo status (nếu có)
     if (req.query.status) {
-      whereParts.push(`cfd.status = ?`);
       params.push(req.query.status);
+      whereParts.push(`cfd.status = $${params.length}`);
     }
 
-    // Staff chỉ thấy form của chính mình
     if (isStaffRole(req)) {
-      whereParts.push(`cfd.user_id = ?`);
       params.push(req.user.id);
+      whereParts.push(`cfd.user_id = $${params.length}`);
     }
 
-    const whereClause = whereParts.length
-      ? `WHERE ${whereParts.join(" AND ")}`
-      : "";
+    const whereClause = whereParts.length > 0 ? `WHERE ${whereParts.join(" AND ")}` : "";
 
-    // COUNT: alias cùng là cfd để tránh lẫn
-    const [countResult] = await db.query(
-      `SELECT COUNT(*) AS total FROM contact_form_design cfd ${whereClause}`,
+    const { rows: countRows } = await db.query(
+      `SELECT COUNT(*)::int AS total FROM contact_form_design cfd ${whereClause}`,
       params
     );
-    const totalForms = countResult[0].total;
+
+    const totalForms = Number(countRows[0]?.total || 0);
     const totalPages = Math.ceil(totalForms / limit);
 
-    // LIST
-    const [forms] = await db.query(
+    const listParams = [...params, limit, offset];
+    const limitIndex = `$${params.length + 1}`;
+    const offsetIndex = `$${params.length + 2}`;
+
+    const { rows: forms } = await db.query(
       `
       SELECT
         cfd.contact_form_design_id,
@@ -172,15 +232,15 @@ router.get("/", verifyToken, isAdmin, async (req, res) => {
         cfd.updated_at,
         u.user_name AS servicer_name
       FROM contact_form_design cfd
-      LEFT JOIN \`user\` u ON u.user_id = cfd.user_id
+      LEFT JOIN "user" u ON u.user_id = cfd.user_id
       ${whereClause}
       ORDER BY cfd.created_at DESC
-      LIMIT ?, ?
+      LIMIT ${limitIndex} OFFSET ${offsetIndex}
       `,
-      [...params, offset, limit]
+      listParams
     );
 
-    res.json({
+    return res.json({
       forms,
       pagination: {
         currentPage: page,
@@ -190,29 +250,31 @@ router.get("/", verifyToken, isAdmin, async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch contact forms" });
+    return res.status(500).json({ error: "Failed to fetch contact forms" });
   }
 });
 
 /**
  * @route   GET /api/contact-forms/:id
- * @desc    Lấy chi tiết một form liên hệ
+ * @desc    Lay chi tiet mot form lien he
  * @access  Private (Admin only)
  */
 router.get("/:id", verifyToken, isAdmin, async (req, res) => {
   try {
-    const id = Number(req.params.id);
-    if (isNaN(id)) {
+    const id = parseId(req.params.id);
+    if (!id) {
       return res.status(400).json({ error: "Invalid contact form ID" });
     }
 
-    const [forms] = await db.query(
-      `SELECT 
+    const { rows: forms } = await db.query(
+      `
+      SELECT
         contact_form_design.*,
-        u.user_name as staff_name
+        u.user_name AS staff_name
       FROM contact_form_design
-      LEFT JOIN user u ON u.user_id = contact_form_design.user_id
-      WHERE contact_form_design.contact_form_design_id = ?`,
+      LEFT JOIN "user" u ON u.user_id = contact_form_design.user_id
+      WHERE contact_form_design.contact_form_design_id = $1
+      `,
       [id]
     );
 
@@ -220,21 +282,21 @@ router.get("/:id", verifyToken, isAdmin, async (req, res) => {
       return res.status(404).json({ error: "Contact form not found" });
     }
 
-    res.json(forms[0]);
+    return res.json(forms[0]);
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch contact form" });
+    return res.status(500).json({ error: "Failed to fetch contact form" });
   }
 });
 
 /**
  * @route   PUT /api/contact-forms/:id
- * @desc    Cập nhật trạng thái form liên hệ
+ * @desc    Cap nhat trang thai form lien he
  * @access  Private (Admin only)
  */
 router.put("/:id", verifyToken, isAdmin, async (req, res) => {
   try {
-    const id = Number(req.params.id);
-    if (isNaN(id)) {
+    const id = parseId(req.params.id);
+    if (!id) {
       return res.status(400).json({ error: "Invalid contact form ID" });
     }
 
@@ -256,110 +318,96 @@ router.put("/:id", verifyToken, isAdmin, async (req, res) => {
       "drive",
     ];
 
-    // Kiểm tra form tồn tại
-    const [forms] = await db.query(
-      "SELECT * FROM contact_form_design WHERE contact_form_design_id = ?",
+    const { rows: forms } = await db.query(
+      "SELECT * FROM contact_form_design WHERE contact_form_design_id = $1",
       [id]
     );
     if (forms.length === 0) {
       return res.status(404).json({ error: "Contact form not found" });
     }
 
-    // Kiểm tra trạng thái hợp lệ
     if (status !== undefined && status !== null && status !== "") {
-      const [statusEnumRows] = await db.query(`
-        SHOW COLUMNS FROM contact_form_design LIKE 'status'
-      `);
-      const statusEnumStr = statusEnumRows[0].Type.match(/enum\((.*)\)/)[1];
-      const validStatuses = statusEnumStr
-        .split(",")
-        .map((s) => s.replace(/'/g, "").trim());
-
-      if (!validStatuses.includes(status)) {
-        return res.status(400).json({ error: "Trạng thái không hợp lệ" });
+      if (!CONTACT_FORM_STATUSES.includes(status)) {
+        return res.status(400).json({ error: "Trang thai khong hop le" });
       }
-      // Kiểm tra chuyển trạng thái hợp lệ
+
       const currentStatus = forms[0].status;
-      const validTransitions = {
-        PENDING: ["IN_PROGRESS"],
-        IN_PROGRESS: ["DEPOSIT"],
-        DEPOSIT: ["RESOLVED", "REJECTED"],
-      };
+      const allowedNextStatuses = VALID_STATUS_TRANSITIONS[currentStatus] || [];
+
       if (status === "IN_PROGRESS" && forms[0].user_id === null) {
         return res.status(400).json({
-          error:
-            "Vui lòng chọn nhân viên thực hiện trước khi chuyển trạng thái",
+          error: "Vui long chon nhan vien thuc hien truoc khi chuyen trang thai",
         });
       }
-      if (
-        status !== currentStatus &&
-        !validTransitions[currentStatus].includes(status)
-      ) {
+
+      if (status !== currentStatus && !allowedNextStatuses.includes(status)) {
         return res
           .status(400)
-          .json({ error: "Trạng thái không được phép chuyển đổi" });
+          .json({ error: "Trang thai khong duoc phep chuyen doi" });
       }
     }
 
-    // kiểm tra budget và design_fee
-    const { budget, design_fee } = rest;
-    if (budget !== undefined && isNaN(budget)) {
-      return res.status(400).json({ error: "Budget phải là số" });
-    }
-    if (design_fee !== undefined && isNaN(design_fee)) {
-      return res.status(400).json({ error: "Design_fee phải là số" });
+    const budgetValue = toNullableNumber(rest.budget);
+    if (Number.isNaN(budgetValue)) {
+      return res.status(400).json({ error: "Budget phai la so" });
     }
 
-    // Cập nhật form
+    const designFeeValue = toNullableNumber(rest.design_fee);
+    if (Number.isNaN(designFeeValue)) {
+      return res.status(400).json({ error: "Design_fee phai la so" });
+    }
+
+    if (rest.budget !== undefined) {
+      rest.budget = budgetValue;
+    }
+    if (rest.design_fee !== undefined) {
+      rest.design_fee = designFeeValue;
+    }
+
     const updates = [];
     const values = [];
 
-    // Duyệt qua các trường được phép update
     for (const key of editableFields) {
       if (rest[key] !== undefined) {
-        updates.push(`${key} = ?`);
         values.push(rest[key]);
+        updates.push(`${key} = $${values.length}`);
       }
     }
 
-    // Thêm status nếu có truyền lên
     if (status !== undefined && status !== null && status !== "") {
-      updates.push("status = ?");
       values.push(status);
+      updates.push(`status = $${values.length}`);
     }
 
     if (remarks !== undefined) {
-      updates.push("remarks = ?");
       values.push(remarks);
+      updates.push(`remarks = $${values.length}`);
     }
 
-    // Luôn cập nhật updated_at
     updates.push("updated_at = NOW()");
 
-    if (updates.length === 1 && updates[0] === "updated_at = NOW()") {
-      return res.status(400).json({ error: "Không có dữ liệu cập nhật" });
+    if (updates.length === 1) {
+      return res.status(400).json({ error: "Khong co du lieu cap nhat" });
     }
 
     values.push(id);
 
     await db.query(
-      `UPDATE contact_form_design SET ${updates.join(
-        ", "
-      )} WHERE contact_form_design_id = ?`,
+      `UPDATE contact_form_design SET ${updates.join(", ")} WHERE contact_form_design_id = $${values.length}`,
       values
     );
 
-    const [updatedForm] = await db.query(
-      "SELECT * FROM contact_form_design WHERE contact_form_design_id = ?",
+    const { rows: updatedRows } = await db.query(
+      "SELECT * FROM contact_form_design WHERE contact_form_design_id = $1",
       [id]
     );
 
-    res.json({
+    return res.json({
       message: "Contact form updated successfully",
-      form: updatedForm[0],
+      form: updatedRows[0],
     });
   } catch (error) {
-    res.status(500).json({ error: "Failed to update contact form" });
+    return res.status(500).json({ error: "Failed to update contact form" });
   }
 });
 
@@ -369,353 +417,346 @@ router.put("/:id", verifyToken, isAdmin, async (req, res) => {
  */
 router.get("/:id/details/debug", async (req, res) => {
   try {
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id);
 
-    if (isNaN(id)) {
+    if (!id) {
       return res.status(400).json({ error: "Invalid ID" });
     }
 
-    const [details] = await db.query(
-      `SELECT cfdd.*, v.variant_name, v.variant_price, v.variant_description,
-              v.variant_product_list_image, v.variant_discount,
-              p.product_name, p.product_description, p.product_code,
-              vd.variant_default_id, vd.variant_default_name
-       FROM contact_form_design_details cfdd
-       LEFT JOIN variants v ON cfdd.variant_id = v.variant_id
-       LEFT JOIN products p ON v.product_id = p.product_id
-       LEFT JOIN variant_defaults vd ON v.variant_default_id = vd.variant_default_id
-       WHERE cfdd.contact_form_design_id = ?`,
+    const { rows: details } = await db.query(
+      `
+      SELECT
+        cfdd.*,
+        v.variant_name,
+        v.variant_price,
+        v.variant_description,
+        v.variant_product_list_image,
+        v.variant_discount,
+        p.product_name,
+        p.product_description,
+        p.product_code,
+        vd.variant_default_id,
+        vd.variant_default_name
+      FROM contact_form_design_details cfdd
+      LEFT JOIN variants v ON cfdd.variant_id = v.variant_id
+      LEFT JOIN products p ON v.product_id = p.product_id
+      LEFT JOIN variant_defaults vd ON v.variant_default_id = vd.variant_default_id
+      WHERE cfdd.contact_form_design_id = $1
+      `,
       [id]
     );
-    if (details.length > 0) {
-    } else {
-    }
 
-    res.json({ 
-      success: true, 
+    return res.json({
+      success: true,
       data: details,
       debug: {
         count: details.length,
-        firstItemKeys: details.length > 0 ? Object.keys(details[0]) : []
-      }
+        firstItemKeys: details.length > 0 ? Object.keys(details[0]) : [],
+      },
     });
   } catch (error) {
-    res.status(500).json({ error: "Lỗi server" });
+    return res.status(500).json({ error: "Loi server" });
   }
 });
 
 /**
  * @route   GET /api/contact-form-design/:id/details
- * @desc    Lấy danh sách sản phẩm trong chi tiết thiết kế
+ * @desc    Lay danh sach san pham trong chi tiet thiet ke
  * @access  Private (Admin only)
  */
 router.get("/:id/details", verifyToken, isAdmin, async (req, res) => {
   try {
-    const contact_form_design_id = Number(req.params.id);
-    if (isNaN(contact_form_design_id)) {
+    const contactFormDesignId = parseId(req.params.id);
+    if (!contactFormDesignId) {
       return res.status(400).json({ error: "Invalid contact form ID" });
     }
 
-    const [details] = await db.query(
-      `SELECT
-                d.*,
-                v.variant_product_price,
-                v.variant_product_list_image,
-                v.color_id,
-                c.color_hex,
-                c.color_name,
-                p.product_name as product_name
-             FROM contact_form_design_details d
-             JOIN variant_product v ON d.variant_id = v.variant_id
-             JOIN color c ON v.color_id = c.color_id
-             JOIN product p ON v.product_id = p.product_id
-             WHERE d.contact_form_design_id = ?`,
-      [contact_form_design_id]
+    const { rows: details } = await db.query(
+      `
+      SELECT
+        d.*,
+        v.variant_product_price,
+        v.variant_product_list_image,
+        v.color_id,
+        c.color_code AS color_hex,
+        c.color_name,
+        p.product_name AS product_name
+      FROM contact_form_design_details d
+      JOIN variant_product v ON d.variant_id = v.variant_id
+      JOIN color c ON v.color_id = c.color_id
+      JOIN product p ON v.product_id = p.product_id
+      WHERE d.contact_form_design_id = $1
+      `,
+      [contactFormDesignId]
     );
 
     const result = details.map((item) => {
-      let first_image = null;
+      let firstImage = null;
       if (item.variant_product_list_image) {
-        first_image = item.variant_product_list_image
+        firstImage = item.variant_product_list_image
           .split(",")
-          .map((img) => img.trim().replace(/^['"]+|['"]+$/g, ""))
-          .find((img) => img); // Lấy phần tử đầu tiên KHÔNG rỗng
+          .map((img) => img.trim().replace(/^['\"]+|['\"]+$/g, ""))
+          .find((img) => img);
       }
 
       const { variant_product_list_image, ...rest } = item;
-      const resultItem = {
+      return {
         ...rest,
-        first_image: first_image || null,
+        first_image: firstImage || null,
       };
-      
-      return resultItem;
     });
 
-    res.json(result);
+    return res.json(result);
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch design details" });
+    return res.status(500).json({ error: "Failed to fetch design details" });
   }
 });
 
 /**
  * @route   POST /api/contact-form-design/:id/details
- * @desc    Thêm sản phẩm vào chi tiết thiết kế
+ * @desc    Them san pham vao chi tiet thiet ke
  * @access  Private (Admin only)
  */
 router.post("/:id/details", verifyToken, isAdmin, async (req, res) => {
   try {
-    const contact_form_design_id = Number(req.params.id);
-    if (isNaN(contact_form_design_id)) {
+    const contactFormDesignId = parseId(req.params.id);
+    if (!contactFormDesignId) {
       return res.status(400).json({ error: "Invalid contact form ID" });
     }
 
     let { variant_id, quantity, unit_price } = req.body;
 
-    // Ép kiểu đúng
     variant_id = Number(variant_id);
     quantity = Number(quantity);
     unit_price = Number(unit_price);
 
     if (!variant_id || !quantity || !unit_price) {
       return res.status(400).json({
-        error:
-          "variant_id, quantity, and unit_price are required and must be number",
+        error: "variant_id, quantity, and unit_price are required and must be number",
       });
     }
 
-    // Check if contact form exists
-    const [forms] = await db.query(
-      "SELECT * FROM contact_form_design WHERE contact_form_design_id = ?",
-      [contact_form_design_id]
+    const { rows: forms } = await db.query(
+      "SELECT * FROM contact_form_design WHERE contact_form_design_id = $1",
+      [contactFormDesignId]
     );
 
     if (forms.length === 0) {
       return res.status(404).json({ error: "Contact form not found" });
     }
 
-    // Check if variant exists
-    const [variants] = await db.query(
-      "SELECT * FROM variant_product WHERE variant_id = ?",
+    const { rows: variants } = await db.query(
+      "SELECT * FROM variant_product WHERE variant_id = $1",
       [variant_id]
     );
     if (variants.length === 0) {
       return res.status(404).json({ error: "Variant not found" });
     }
 
-    // check if variant is already in the design
-    const [existingVariant] = await db.query(
-      "SELECT * FROM contact_form_design_details WHERE contact_form_design_id = ? AND variant_id = ?",
-      [contact_form_design_id, variant_id]
+    const { rows: existingVariantRows } = await db.query(
+      `
+      SELECT *
+      FROM contact_form_design_details
+      WHERE contact_form_design_id = $1 AND variant_id = $2
+      `,
+      [contactFormDesignId, variant_id]
     );
-    if (existingVariant.length > 0) {
-      const oldQuantity = Number(existingVariant[0].quantity);
+
+    if (existingVariantRows.length > 0) {
+      const oldQuantity = Number(existingVariantRows[0].quantity);
       const newQuantity = oldQuantity + quantity;
       const newTotalPrice = newQuantity * unit_price;
+
       await db.query(
-        `UPDATE contact_form_design_details 
-         SET quantity = ?, unit_price = ?, total_price = ?, updated_at = NOW() 
-         WHERE contact_form_design_id = ? AND variant_id = ?`,
-        [
-          newQuantity,
-          unit_price,
-          newTotalPrice,
-          contact_form_design_id,
-          variant_id,
-        ]
+        `
+        UPDATE contact_form_design_details
+        SET quantity = $1, unit_price = $2, total_price = $3, updated_at = NOW()
+        WHERE contact_form_design_id = $4 AND variant_id = $5
+        `,
+        [newQuantity, unit_price, newTotalPrice, contactFormDesignId, variant_id]
       );
 
       return res.status(200).json({
-        message: "Đã cập nhật số lượng sản phẩm trong form thiết kế.",
+        message: "Da cap nhat so luong san pham trong form thiet ke.",
         variant_id,
         quantity: newQuantity,
         total_price: newTotalPrice,
       });
     }
 
-    const total_price = quantity * unit_price;
+    const totalPrice = quantity * unit_price;
 
-    // Insert chi tiết vào bảng
-    const [result] = await db.query(
-      `INSERT INTO contact_form_design_details (
-        contact_form_design_id, 
-        variant_id, 
-        quantity, 
-        unit_price, 
+    const { rows: insertedRows } = await db.query(
+      `
+      INSERT INTO contact_form_design_details (
+        contact_form_design_id,
+        variant_id,
+        quantity,
+        unit_price,
         total_price,
-        created_at, 
+        created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, NOW(), NOW())`,
-      [contact_form_design_id, variant_id, quantity, unit_price, total_price]
+      ) VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+      RETURNING contact_form_design_detail_id
+      `,
+      [contactFormDesignId, variant_id, quantity, unit_price, totalPrice]
     );
-    // Optionally trả về chi tiết đã thêm
-    res.status(201).json({
+
+    return res.status(201).json({
       message: "Product variant added to design successfully",
-      detailId: result.insertId,
+      detailId: insertedRows[0].contact_form_design_detail_id,
       variant_id,
       quantity,
-      total_price,
+      total_price: totalPrice,
     });
   } catch (error) {
-    res.status(500).json({ error: "Failed to add product variant to design" });
+    return res.status(500).json({ error: "Failed to add product variant to design" });
   }
 });
 
 /**
- * @route   PUT /api/contact-form-design/:id/details/:detail_id
- * @desc    Cập nhật sản phẩm trong chi tiết thiết kế
+ * @route   PUT /api/contact-form-design/:id/details/:variant_id
+ * @desc    Cap nhat san pham trong chi tiet thiet ke
  * @access  Private (Admin only)
  */
-router.put(
-  "/:id/details/:variant_id",
-  verifyToken,
-  isAdmin,
-  async (req, res) => {
-    try {
-      const { id, variant_id } = req.params;
-      const contact_form_design_id = Number(id);
-      const variantId = Number(variant_id);
+router.put("/:id/details/:variant_id", verifyToken, isAdmin, async (req, res) => {
+  try {
+    const contactFormDesignId = parseId(req.params.id);
+    const variantId = parseId(req.params.variant_id);
 
-      if (isNaN(contact_form_design_id) || isNaN(variantId)) {
-        return res.status(400).json({ error: "Invalid ID" });
-      }
-
-      let { quantity, unit_price } = req.body;
-
-      // Lấy thông tin chi tiết hiện tại (dựa vào contact_form_design_id và variant_id)
-      const [details] = await db.query(
-        "SELECT * FROM contact_form_design_details WHERE contact_form_design_id = ? AND variant_id = ?",
-        [contact_form_design_id, variantId]
-      );
-
-      if (details.length === 0) {
-        return res.status(404).json({
-          error: "Detail item not found or does not belong to this design",
-        });
-      }
-      const currentDetail = details[0];
-
-      // Nếu FE không truyền thì lấy giá trị cũ
-      quantity =
-        quantity !== undefined
-          ? Number(quantity)
-          : Number(currentDetail.quantity);
-      unit_price =
-        unit_price !== undefined
-          ? Number(unit_price)
-          : Number(currentDetail.unit_price);
-
-      if (quantity <= 0 || unit_price <= 0) {
-        return res
-          .status(400)
-          .json({ error: "quantity and unit_price must be positive numbers" });
-      }
-
-      const total_price = quantity * unit_price;
-
-      const [result] = await db.query(
-        `UPDATE contact_form_design_details 
-             SET quantity = ?, unit_price = ?, total_price = ?, updated_at = NOW()
-             WHERE contact_form_design_id = ? AND variant_id = ?`,
-        [quantity, unit_price, total_price, contact_form_design_id, variantId]
-      );
-
-      if (result.affectedRows === 0) {
-        return res.status(404).json({ error: "Detail item not found" });
-      }
-
-      // Trả về detail mới (cập nhật xong)
-      res.json({
-        message: "Design detail updated successfully",
-        detail: {
-          contact_form_design_id,
-          variant_id: variantId,
-          quantity,
-          unit_price,
-          total_price,
-        },
-      });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to update design detail" });
+    if (!contactFormDesignId || !variantId) {
+      return res.status(400).json({ error: "Invalid ID" });
     }
+
+    let { quantity, unit_price } = req.body;
+
+    const { rows: details } = await db.query(
+      `
+      SELECT *
+      FROM contact_form_design_details
+      WHERE contact_form_design_id = $1 AND variant_id = $2
+      `,
+      [contactFormDesignId, variantId]
+    );
+
+    if (details.length === 0) {
+      return res.status(404).json({
+        error: "Detail item not found or does not belong to this design",
+      });
+    }
+
+    const currentDetail = details[0];
+
+    quantity =
+      quantity !== undefined ? Number(quantity) : Number(currentDetail.quantity);
+    unit_price =
+      unit_price !== undefined ? Number(unit_price) : Number(currentDetail.unit_price);
+
+    if (quantity <= 0 || unit_price <= 0) {
+      return res
+        .status(400)
+        .json({ error: "quantity and unit_price must be positive numbers" });
+    }
+
+    const totalPrice = quantity * unit_price;
+
+    const { rowCount } = await db.query(
+      `
+      UPDATE contact_form_design_details
+      SET quantity = $1, unit_price = $2, total_price = $3, updated_at = NOW()
+      WHERE contact_form_design_id = $4 AND variant_id = $5
+      `,
+      [quantity, unit_price, totalPrice, contactFormDesignId, variantId]
+    );
+
+    if (rowCount === 0) {
+      return res.status(404).json({ error: "Detail item not found" });
+    }
+
+    return res.json({
+      message: "Design detail updated successfully",
+      detail: {
+        contact_form_design_id: contactFormDesignId,
+        variant_id: variantId,
+        quantity,
+        unit_price,
+        total_price: totalPrice,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ error: "Failed to update design detail" });
   }
-);
+});
 
 /**
  * @route   DELETE /api/contact-form-design/:id/details/:variant_id
- * @desc    Xóa sản phẩm khỏi chi tiết thiết kế
+ * @desc    Xoa san pham khoi chi tiet thiet ke
  * @access  Private (Admin only)
  */
-router.delete(
-  "/:id/details/:variant_id",
-  verifyToken,
-  isAdmin,
-  async (req, res) => {
-    try {
-      const { id, variant_id } = req.params;
-      const contact_form_design_id = Number(id);
-      const variantId = Number(variant_id);
+router.delete("/:id/details/:variant_id", verifyToken, isAdmin, async (req, res) => {
+  try {
+    const contactFormDesignId = parseId(req.params.id);
+    const variantId = parseId(req.params.variant_id);
 
-      if (isNaN(contact_form_design_id) || isNaN(variantId)) {
-        return res.status(400).json({ error: "Invalid ID" });
-      }
-
-      const [result] = await db.query(
-        "DELETE FROM contact_form_design_details WHERE contact_form_design_id = ? AND variant_id = ?",
-        [contact_form_design_id, variantId]
-      );
-
-      if (result.affectedRows === 0) {
-        return res.status(404).json({
-          error: "Sản phẩm không tồn tại trong form thiết kế",
-        });
-      }
-
-      res.json({ message: "Sản phẩm đã được xóa khỏi form thiết kế" });
-    } catch (error) {
-      res
-        .status(500)
-        .json({ error: "Không thể xóa sản phẩm khỏi form thiết kế" });
+    if (!contactFormDesignId || !variantId) {
+      return res.status(400).json({ error: "Invalid ID" });
     }
+
+    const { rowCount } = await db.query(
+      `
+      DELETE FROM contact_form_design_details
+      WHERE contact_form_design_id = $1 AND variant_id = $2
+      `,
+      [contactFormDesignId, variantId]
+    );
+
+    if (rowCount === 0) {
+      return res.status(404).json({
+        error: "San pham khong ton tai trong form thiet ke",
+      });
+    }
+
+    return res.json({ message: "San pham da duoc xoa khoi form thiet ke" });
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ error: "Khong the xoa san pham khoi form thiet ke" });
   }
-);
+});
 
 /**
  * @route   DELETE /api/contact-forms/:id
- * @desc    Xóa form liên hệ
+ * @desc    Xoa form lien he
  * @access  Private (Admin only)
  */
 router.delete("/:id", verifyToken, isAdmin, async (req, res) => {
   try {
-    const id = Number(req.params.id);
-    if (isNaN(id)) {
-      return res.status(400).json({ error: "ID contact form không hợp lệ" });
+    const id = parseId(req.params.id);
+    if (!id) {
+      return res.status(400).json({ error: "ID contact form khong hop le" });
     }
 
-    // Kiểm tra form tồn tại
-    const [forms] = await db.query(
-      "SELECT * FROM contact_form_design WHERE contact_form_design_id = ?",
+    const { rows: forms } = await db.query(
+      "SELECT * FROM contact_form_design WHERE contact_form_design_id = $1",
       [id]
     );
 
     if (forms.length === 0) {
-      return res.status(404).json({ error: "Form liên hệ không tồn tại" });
+      return res.status(404).json({ error: "Form lien he khong ton tai" });
     }
 
-    //  Xóa liên kết với bảng contact_form_design_details
     await db.query(
-      "DELETE FROM contact_form_design_details WHERE contact_form_design_id = ?",
+      "DELETE FROM contact_form_design_details WHERE contact_form_design_id = $1",
       [id]
     );
 
-    // Xóa form
-    await db.query(
-      "DELETE FROM contact_form_design WHERE contact_form_design_id = ?",
-      [id]
-    );
+    await db.query("DELETE FROM contact_form_design WHERE contact_form_design_id = $1", [
+      id,
+    ]);
 
-    res.json({ message: "Form liên hệ đã được xóa thành công" });
+    return res.json({ message: "Form lien he da duoc xoa thanh cong" });
   } catch (error) {
-    res.status(500).json({ error: "Không thể xóa form liên hệ" });
+    return res.status(500).json({ error: "Khong the xoa form lien he" });
   }
 });
 

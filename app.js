@@ -163,6 +163,7 @@ app.use("/api/banners", bannersRouter);
 app.use("/api/materials", materialsRouter);
 app.use("/api/revenue", revenueRouter);
 app.use("/api/notify", NotifyRouter);
+app.use("/api/notifications", NotifyRouter);
 app.use("/api/typeNotify", typeNotifyRouter);
 app.use("/api/attribute", attributeRouter);
 app.use("/api/events", eventsRouter);
@@ -193,3 +194,4 @@ app.use(function (err, req, res, next) {
 });
 
 module.exports = app;
+

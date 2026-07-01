@@ -1,285 +1,192 @@
 const express = require("express");
 const router = express.Router();
 const db = require("../config/database");
-const { verifyToken, isAdmin, optionalAuth } = require("../middleware/auth");
+const { verifyToken, isAdmin } = require("../middleware/auth");
 
-// các end point liên quan đến doanh thu
-// 1. GET /api/revenue → trả về 7 ngày gần nhất
-// 2. GET /api/revenue?type=day&limit=10 → 10 ngày gần nhất
-// 3. Theo tháng:
-// GET /api/revenue?type=month → 12 tháng mới nhất
-// GET /api/revenue?type=month&limit=6 → 6 tháng mới nhất
-// 4. Theo năm:
-// GET /api/revenue?type=year → 5 năm mới nhất
-// GET /api/revenue?type=year&limit=3 → 3 năm mới nhất
 require("dayjs/locale/vi");
 const dayjs = require("dayjs");
 const isSameOrBefore = require("dayjs/plugin/isSameOrBefore");
 dayjs.extend(isSameOrBefore);
 
+const ORDER_STATUS_COMPLETED = 4;
+const ORDER_STATUS_SHIPPING = 2;
+
+function getTimeConfig(type, limit) {
+  if (type === "month") {
+    return {
+      format: "YYYY-MM",
+      sqlFormat: "YYYY-MM",
+      unit: "month",
+      limit: Number(limit) || 12,
+    };
+  }
+
+  if (type === "year") {
+    return {
+      format: "YYYY",
+      sqlFormat: "YYYY",
+      unit: "year",
+      limit: Number(limit) || 5,
+    };
+  }
+
+  return {
+    format: "YYYY-MM-DD",
+    sqlFormat: "YYYY-MM-DD",
+    unit: "day",
+    limit: Number(limit) || 7,
+  };
+}
+
+function buildDateList({ type, from, to, limit }) {
+  const config = getTimeConfig(type, limit);
+  const dateList = [];
+
+  if (from && to) {
+    let start = dayjs(from);
+    const end = dayjs(to);
+
+    while (start.isSameOrBefore(end, config.unit)) {
+      dateList.push(start.format(config.format));
+      start = start.add(1, config.unit);
+    }
+
+    return { config, dateList };
+  }
+
+  const today = dayjs();
+  for (let i = config.limit - 1; i >= 0; i -= 1) {
+    dateList.push(today.subtract(i, config.unit).format(config.format));
+  }
+
+  return { config, dateList };
+}
+
 router.get("/", verifyToken, isAdmin, async (req, res) => {
   try {
     const { type = "day", from, to, limit } = req.query;
-    let dateList = [];
-    let dateFormat, limitNum;
+    const { config, dateList } = buildDateList({ type, from, to, limit });
 
-    // 1. Xác định format và số lượng mốc thời gian
-    if (type === "month") {
-      dateFormat = "%Y-%m";
-      limitNum = Number(limit) || 12;
-    } else if (type === "year") {
-      dateFormat = "%Y";
-      limitNum = Number(limit) || 5;
-    } else {
-      dateFormat = "%Y-%m-%d";
-      limitNum = Number(limit) || 7;
-    }
-
-    // 2. Nếu có from/to: vẫn cho filter như cũ
-    if (from && to) {
-      // Sinh dải ngày/tháng/năm từ from → to
-      let start = dayjs(from);
-      let end = dayjs(to);
-      let unit;
-      if (type === "day") unit = "day";
-      else if (type === "month") unit = "month";
-      else unit = "year";
-      while (start.isSameOrBefore(end, unit)) {
-        if (type === "day") {
-          dateList.push(start.format("YYYY-MM-DD"));
-          start = start.add(1, "day");
-        } else if (type === "month") {
-          dateList.push(start.format("YYYY-MM"));
-          start = start.add(1, "month");
-        } else if (type === "year") {
-          dateList.push(start.format("YYYY"));
-          start = start.add(1, "year");
-        }
-      }
-    } else {
-      // 3. Luôn dùng ngày hiện tại của hệ thống (today)
-      const today = dayjs();
-      if (type === "day") {
-        for (let i = limitNum - 1; i >= 0; i--) {
-          dateList.push(today.subtract(i, "day").format("YYYY-MM-DD"));
-        }
-      } else if (type === "month") {
-        for (let i = limitNum - 1; i >= 0; i--) {
-          dateList.push(today.subtract(i, "month").format("YYYY-MM"));
-        }
-      } else if (type === "year") {
-        for (let i = limitNum - 1; i >= 0; i--) {
-          dateList.push(today.subtract(i, "year").format("YYYY"));
-        }
-      }
-    }
-
-    // 4. Truy vấn và mapping giữ nguyên
-    // Orders
-    const [orders] = await db.query(
+    const { rows: orders } = await db.query(
       `
-      SELECT DATE_FORMAT(created_at, ?) AS date, SUM(order_total_final) AS revenue
+      SELECT
+        to_char(created_at, $1) AS date,
+        SUM(order_final_total)::numeric AS revenue
       FROM orders
-      WHERE current_status = 'SUCCESS' AND DATE_FORMAT(created_at, ?) IN (?)
-      GROUP BY DATE_FORMAT(created_at, ?)
+      WHERE order_status = $2
+        AND to_char(created_at, $1) = ANY($3::text[])
+      GROUP BY to_char(created_at, $1)
       `,
-      [dateFormat, dateFormat, dateList, dateFormat]
-    );
-    // Design contacts
-    const [designContacts] = await db.query(
-      `
-     SELECT 
-        DATE_FORMAT(d.created_at, ?) AS date,
-        SUM(CASE WHEN d.status = 'RESOLVED' THEN d.design_fee ELSE 0 END) AS design_fee_total,
-        SUM(CASE WHEN d.status = 'RESOLVED' THEN IFNULL(dd.products_total, 0) ELSE 0 END) AS products_total,
-        SUM(CASE WHEN d.status = 'DEPOSIT' THEN d.design_deposits ELSE 0 END) AS design_deposits_total
-      FROM contact_form_design d
-      LEFT JOIN (
-          SELECT 
-            contact_form_design_id, 
-            SUM(total_price) AS products_total
-          FROM contact_form_design_details
-          WHERE deleted_at IS NULL
-          GROUP BY contact_form_design_id
-      ) dd ON d.contact_form_design_id = dd.contact_form_design_id
-      WHERE d.status IN ('RESOLVED', 'DEPOSIT')
-        AND DATE_FORMAT(d.created_at, ?) IN (?)
-      GROUP BY DATE_FORMAT(d.created_at, ?)
-      `,
-      [dateFormat, dateFormat, dateList, dateFormat]
+      [config.sqlFormat, ORDER_STATUS_COMPLETED, dateList]
     );
 
-    // Map kết quả vào dải ngày liên tục (ngày nào không có revenue thì để 0)
     const resultMap = {};
-    dateList.forEach((date) => {
+    for (const date of dateList) {
       resultMap[date] = { date, orderRevenue: 0, designRevenue: 0 };
-    });
-    orders.forEach((row) => {
-      if (resultMap[row.date])
-        resultMap[row.date].orderRevenue = Number(row.revenue) || 0;
-    });
-    designContacts.forEach((row) => {
+    }
+
+    for (const row of orders) {
       if (resultMap[row.date]) {
-        // Cộng luôn 2 khoản vào designRevenue
-        const designFee = Number(row.design_fee_total) || 0;
-        const productsTotal = Number(row.products_total) || 0;
-        const designDeposits = Number(row.design_deposits_total) || 0;
-        resultMap[row.date].designRevenue = designFee + productsTotal + designDeposits;
-        // resultMap[row.date].depositRevenue = designDeposits; // Tiền cọc chờ xử lý
+        resultMap[row.date].orderRevenue = Number(row.revenue) || 0;
       }
-    });
+    }
 
     const result = dateList.map((date) => resultMap[date]);
-
-    res.json(result);
+    return res.json(result);
   } catch (error) {
-    res.status(500).json({ error: "Internal server error" });
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// Lấy tổng số người dùng
-// GET /user?type=day (hoặc không truyền): trả về số user mới từng ngày (7 ngày gần nhất)
-// GET /user?type=month: trả về số user mới từng tháng (12 tháng gần nhất)
-// GET /user?type=year: trả về số user mới từng năm (5 năm gần nhất)
 router.get("/user", verifyToken, isAdmin, async (req, res) => {
   try {
     const { type = "day", from, to, limit } = req.query;
-    let dateFormat,
-      limitNum,
-      dateList = [];
+    const { config, dateList } = buildDateList({ type, from, to, limit });
 
-    // 1. Xác định định dạng và số lượng
-    if (type === "month") {
-      dateFormat = "%Y-%m";
-      limitNum = Number(limit) || 6;
-    } else if (type === "year") {
-      dateFormat = "%Y";
-      limitNum = Number(limit) || 5;
-    } else {
-      dateFormat = "%Y-%m-%d";
-      limitNum = Number(limit) || 7;
-    }
-
-    // 2. Nếu truyền from/to thì query theo khoảng thời gian
-    if (from && to) {
-      // Sinh dải ngày/tháng/năm từ from đến to
-      let start = dayjs(from);
-      let end = dayjs(to);
-      while (
-        start.isBefore(end) ||
-        start.isSame(end, type === "day" ? "day" : type)
-      ) {
-        if (type === "day") {
-          dateList.push(start.format("YYYY-MM-DD"));
-          start = start.add(1, "day");
-        } else if (type === "month") {
-          dateList.push(start.format("YYYY-MM"));
-          start = start.add(1, "month");
-        } else if (type === "year") {
-          dateList.push(start.format("YYYY"));
-          start = start.add(1, "year");
-        }
-      }
-    } else {
-      // 3. Không có from/to: dùng ngày hiện tại (today)
-      const today = dayjs();
-      if (type === "day") {
-        for (let i = limitNum - 1; i >= 0; i--) {
-          dateList.push(today.subtract(i, "day").format("YYYY-MM-DD"));
-        }
-      } else if (type === "month") {
-        for (let i = limitNum - 1; i >= 0; i--) {
-          dateList.push(today.subtract(i, "month").format("YYYY-MM"));
-        }
-      } else if (type === "year") {
-        for (let i = limitNum - 1; i >= 0; i--) {
-          dateList.push(today.subtract(i, "year").format("YYYY"));
-        }
-      }
-    }
-
-    // 4. Query số user group theo mốc thời gian
-    const [userCounts] = await db.query(
+    const { rows: userCounts } = await db.query(
       `
-      SELECT DATE_FORMAT(created_at, ?) AS date, COUNT(*) AS total
-      FROM user
-      WHERE DATE_FORMAT(created_at, ?) IN (?)
-      GROUP BY DATE_FORMAT(created_at, ?)
+      SELECT
+        to_char(created_at, $1) AS date,
+        COUNT(*)::int AS total
+      FROM "user"
+      WHERE to_char(created_at, $1) = ANY($2::text[])
+      GROUP BY to_char(created_at, $1)
       `,
-      [dateFormat, dateFormat, dateList, dateFormat]
+      [config.sqlFormat, dateList]
     );
 
-    // 5. Map vào dải ngày liên tục, đảm bảo đủ mốc thời gian, nếu không có user thì trả về 0
     const resultMap = {};
-    dateList.forEach((date) => {
+    for (const date of dateList) {
       resultMap[date] = { date, userCount: 0 };
-    });
-    userCounts.forEach((row) => {
-      if (resultMap[row.date])
+    }
+
+    for (const row of userCounts) {
+      if (resultMap[row.date]) {
         resultMap[row.date].userCount = Number(row.total) || 0;
-    });
+      }
+    }
 
     const result = dateList.map((date) => resultMap[date]);
-    res.json(result);
+    return res.json(result);
   } catch (error) {
-    res.status(500).json({ error: "Internal server error" });
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// Node.js/Express (ví dụ)
 router.get("/stats", verifyToken, isAdmin, async (req, res) => {
   const currentMonth = dayjs().locale("vi").format("MMMM");
-  const fullMonth =
-    currentMonth.charAt(0).toUpperCase() + currentMonth.slice(1);
+  const fullMonth = currentMonth.charAt(0).toUpperCase() + currentMonth.slice(1);
 
-  const [[{ totalOrder } = {}]] = await db.query(
-    `SELECT COUNT(*) AS totalOrder FROM orders`
+  const { rows: totalOrderRows } = await db.query(
+    "SELECT COUNT(*)::int AS total_order FROM orders"
   );
-  const [[{ completedOrder } = {}]] = await db.query(
-    `SELECT COUNT(*) AS completedOrder FROM orders WHERE current_status='SUCCESS'`
+  const { rows: completedOrderRows } = await db.query(
+    "SELECT COUNT(*)::int AS completed_order FROM orders WHERE order_status = $1",
+    [ORDER_STATUS_COMPLETED]
   );
-  const [[{ shippingOrder } = {}]] = await db.query(
-    `SELECT COUNT(*) AS shippingOrder FROM orders WHERE current_status='SHIPPING'`
+  const { rows: shippingOrderRows } = await db.query(
+    "SELECT COUNT(*)::int AS shipping_order FROM orders WHERE order_status = $1",
+    [ORDER_STATUS_SHIPPING]
   );
-  const [[{ revenueThisMonth } = {}]] = await db.query(
-    `SELECT SUM(order_total_final) AS revenueThisMonth FROM orders WHERE current_status='SUCCESS' AND MONTH(created_at)=MONTH(CURDATE()) AND YEAR(created_at)=YEAR(CURDATE())`
+  const { rows: revenueThisMonthRows } = await db.query(
+    `
+    SELECT COALESCE(SUM(order_final_total), 0)::numeric AS revenue_this_month
+    FROM orders
+    WHERE order_status = $1
+      AND date_trunc('month', created_at) = date_trunc('month', CURRENT_DATE)
+    `,
+    [ORDER_STATUS_COMPLETED]
   );
-  const [[{ revenueThisMonthDesign } = {}]] = await db.query(
-    `SELECT SUM(design_fee + IFNULL(products_total, 0)) AS revenueThisMonthDesign 
-    FROM contact_form_design 
-    LEFT JOIN (
-      SELECT contact_form_design_id, SUM(total_price) AS products_total
-      FROM contact_form_design_details
-      WHERE deleted_at IS NULL
-      GROUP BY contact_form_design_id
-    ) dd ON contact_form_design.contact_form_design_id = dd.contact_form_design_id
-    WHERE status='RESOLVED' AND MONTH(created_at)=MONTH(CURDATE()) AND YEAR(created_at)=YEAR(CURDATE())`
+  const { rows: revenueTotalRows } = await db.query(
+    `
+    SELECT COALESCE(SUM(order_final_total), 0)::numeric AS revenue_total
+    FROM orders
+    WHERE order_status = $1
+    `,
+    [ORDER_STATUS_COMPLETED]
   );
-  const [[{ revenueTotal } = {}]] = await db.query(
-    `SELECT SUM(order_total_final) AS revenueTotal FROM orders WHERE current_status='SUCCESS'`
-  );
-  const [[{ revenueTotalDesign } = {}]] = await db.query(
-    `SELECT SUM(design_fee + IFNULL(products_total, 0)) AS revenueTotalDesign 
-    FROM contact_form_design 
-    LEFT JOIN (
-      SELECT contact_form_design_id, SUM(total_price) AS products_total
-      FROM contact_form_design_details
-      WHERE deleted_at IS NULL
-      GROUP BY contact_form_design_id
-    ) dd ON contact_form_design.contact_form_design_id = dd.contact_form_design_id
-    WHERE status='RESOLVED'`
-  );
-  res.json({
-    totalOrder: Number(totalOrder) || 0,
-    completedOrder: Number(completedOrder) || 0,
-    shippingOrder: Number(shippingOrder) || 0,
+
+  const totalOrder = Number(totalOrderRows[0]?.total_order || 0);
+  const completedOrder = Number(completedOrderRows[0]?.completed_order || 0);
+  const shippingOrder = Number(shippingOrderRows[0]?.shipping_order || 0);
+
+  const revenueThisMonth = Number(revenueThisMonthRows[0]?.revenue_this_month || 0);
+  const revenueTotal = Number(revenueTotalRows[0]?.revenue_total || 0);
+
+  const designRevenueThisMonth = 0;
+  const designRevenueTotal = 0;
+
+  return res.json({
+    totalOrder,
+    completedOrder,
+    shippingOrder,
     revenueThisMonth: {
-      total: Number(revenueThisMonth) + Number(revenueThisMonthDesign) || 0,
-      design: Number(revenueThisMonthDesign) || 0,
+      total: revenueThisMonth + designRevenueThisMonth,
+      design: designRevenueThisMonth,
     },
     revenueTotal: {
-      total: Number(revenueTotal) + Number(revenueTotalDesign) || 0,
-      design: Number(revenueTotalDesign) || 0,
+      total: revenueTotal + designRevenueTotal,
+      design: designRevenueTotal,
     },
     monthName: fullMonth,
   });

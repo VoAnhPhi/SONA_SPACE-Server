@@ -5,9 +5,11 @@
 	"scripts": {
 		"start": "node ./bin/www",
 		"dev": "nodemon -L ./bin/www",
+		"dev:pm2": "pm2 start ./bin/www --name furnitown-api --watch --restart-delay=5000",
 		"debug": "DEBUG=furnitown-api:* nodemon -L ./bin/www",
 		"start-pm2": "pm2 start ecosystem.config.js --env production",
-		"start-direct": "NODE_ENV=production node ./bin/www"
+		"start-direct": "NODE_ENV=production node ./bin/www",
+		"check:mysql-patterns": "node ./scripts/check-mysql-patterns.js"
 	},
 	"dependencies": {
 		"@google/genai": "^1.15.0",

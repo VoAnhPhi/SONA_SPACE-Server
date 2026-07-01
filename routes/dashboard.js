@@ -327,11 +327,11 @@ router.get("/orders/detail/:id", isAdmin, async (req, res) => {
     // If API fetch failed, get data directly from database
     if (!order) {
       const db = require("../config/database");
-      const [orderRows] = await db.query(
+      const { rows: orderRows } = await db.query(
         `SELECT o.*, u.user_name as customer_name, u.user_gmail as customer_email, u.user_number as customer_phone
          FROM orders o 
-         LEFT JOIN user u ON o.user_id = u.user_id 
-         WHERE o.order_id = ?`,
+         LEFT JOIN "user" u ON o.user_id = u.user_id 
+         WHERE o.order_id = $1`,
         [orderId]
       );
       
@@ -349,14 +349,14 @@ router.get("/orders/detail/:id", isAdmin, async (req, res) => {
     // If items are missing, fetch them directly from the database
     if (!order.items || order.items.length === 0) {
       const db = require("../config/database");
-      const [items] = await db.query(
+      const { rows: items } = await db.query(
         `
         SELECT oi.*, p.product_name, p.product_image, c.color_hex
         FROM order_items oi
         LEFT JOIN variant_product vp ON oi.variant_id = vp.variant_id
         LEFT JOIN product p ON vp.product_id = p.product_id
         LEFT JOIN color c ON vp.color_id = c.color_id
-        WHERE oi.order_id = ? AND oi.deleted_at IS NULL
+        WHERE oi.order_id = $1 AND oi.deleted_at IS NULL
       `,
         [orderId]
       );
@@ -367,10 +367,22 @@ router.get("/orders/detail/:id", isAdmin, async (req, res) => {
     if (!order.payment || !order.payment.length) {
       try {
         const db = require("../config/database");
-        const [[paymentInfo]] = await db.query(
-          `SELECT method, status, transaction_code, paid_at FROM payments WHERE order_id = ? ORDER BY created_at DESC LIMIT 1`,
+        const { rows: paymentRows } = await db.query(
+          `
+          SELECT
+            p.payment_method AS method,
+            p.payment_status AS status,
+            p.payment_transaction_id AS transaction_code,
+            p.payment_paid_at AS paid_at
+          FROM orders o
+          LEFT JOIN payments p ON o.payment_id = p.payment_id
+          WHERE o.order_id = $1
+          ORDER BY p.created_at DESC
+          LIMIT 1
+          `,
           [orderId]
         );
+        const paymentInfo = paymentRows[0] || null;
 
         if (paymentInfo) {
           order.payment = [paymentInfo];
@@ -649,11 +661,11 @@ router.get("/orders/invoice/:id", async (req, res) => {
     // If API fetch failed, get data directly from database
     if (!order) {
       const db = require("../config/database");
-      const [orderRows] = await db.query(
+      const { rows: orderRows } = await db.query(
         `SELECT o.*, u.user_name as customer_name, u.user_gmail as customer_email, u.user_number as customer_phone
          FROM orders o 
-         LEFT JOIN user u ON o.user_id = u.user_id 
-         WHERE o.order_id = ?`,
+         LEFT JOIN "user" u ON o.user_id = u.user_id 
+         WHERE o.order_id = $1`,
         [orderId]
       );
       
@@ -671,13 +683,13 @@ router.get("/orders/invoice/:id", async (req, res) => {
     // If items are missing, fetch them directly from the database
     if (!order.items || order.items.length === 0) {
       const db = require("../config/database");
-      const [items] = await db.query(
+      const { rows: items } = await db.query(
         `
         SELECT oi.*, p.product_name, vp.variant_product_price, vp.variant_product_price_sale
         FROM order_items oi
         LEFT JOIN variant_product vp ON oi.variant_id = vp.variant_id
         LEFT JOIN product p ON vp.product_id = p.product_id
-        WHERE oi.order_id = ? AND oi.deleted_at IS NULL
+        WHERE oi.order_id = $1 AND oi.deleted_at IS NULL
       `,
         [orderId]
       );
@@ -848,6 +860,31 @@ router.get("/profile", (req, res) => {
     title: "Admin Profile",
     layout: "layouts/dashboard",
   });
+});
+
+// Compatibility routes for legacy dashboard URLs still referenced by old UI scripts
+router.get("/accounts", (req, res) => {
+  return res.redirect("/dashboard/users");
+});
+
+router.get("/staff", (req, res) => {
+  return res.redirect("/dashboard/users");
+});
+
+router.get("/categories/add", (req, res) => {
+  return res.redirect("/dashboard/addcategories");
+});
+
+router.get("/categories/edit/:slug", (req, res) => {
+  return res.redirect(`/dashboard/editcategories/${req.params.slug}`);
+});
+
+router.get("/notifications/type-list", (req, res) => {
+  return res.redirect("/dashboard/typeNotify");
+});
+
+router.get("/typeNotify/edittypenotify/:id", (req, res) => {
+  return res.redirect(`/dashboard/typeNotify/edittypeNotify/${req.params.id}`);
 });
 
 // Banner management

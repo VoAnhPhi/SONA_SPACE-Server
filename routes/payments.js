@@ -1,37 +1,71 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const db = require('../config/database');
-const { verifyToken, isAdmin } = require('../middleware/auth');
+const db = require("../config/database");
+const { withTransaction } = require("../db/transaction");
+const { verifyToken, isAdmin } = require("../middleware/auth");
 
-/**
- * @route   GET /api/payments
- * @desc    Lấy danh sách thanh toán
- * @access  Private (Admin only)
- */
-router.get('/', verifyToken, isAdmin, async (req, res) => {
+const paymentSelect = `
+  p.payment_id,
+  p.payment_method,
+  p.payment_method AS method,
+  p.payment_status,
+  p.payment_status AS status,
+  p.payment_amount,
+  p.payment_amount AS amount,
+  p.payment_transaction_id,
+  p.payment_transaction_id AS transaction_id,
+  p.payment_info,
+  p.payment_info AS payment_details,
+  p.created_at,
+  p.updated_at,
+  o.order_id,
+  o.order_hash,
+  o.order_total,
+  o.order_final_total,
+  o.user_id,
+  u.user_name,
+  u.user_gmail AS user_email
+`;
+
+function isPrivilegedUser(req) {
+  const role = req.user?.role?.toLowerCase();
+  return req.user?.isAdmin || role === "admin" || role === "staff";
+}
+
+function canAccessPayment(req, payment) {
+  return isPrivilegedUser(req) || req.user.id === payment.user_id;
+}
+
+function normalizePaymentInfo(paymentDetails) {
+  if (paymentDetails === undefined) return undefined;
+  if (paymentDetails === null) return null;
+  return typeof paymentDetails === "string" ? paymentDetails : JSON.stringify(paymentDetails);
+}
+
+router.get("/", verifyToken, isAdmin, async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 10;
     const offset = (page - 1) * limit;
 
-    // Lấy tổng số thanh toán
-    const [countResult] = await db.query('SELECT COUNT(*) as total FROM payment');
+    const { rows: countResult } = await db.query(
+      "SELECT COUNT(*)::int AS total FROM payments WHERE deleted_at IS NULL"
+    );
     const totalPayments = countResult[0].total;
     const totalPages = Math.ceil(totalPayments / limit);
 
-    // Lấy danh sách thanh toán
-    const [payments] = await db.query(`
-      SELECT 
-        p.*,
-        o.order_hash,
-        u.user_name,
-        u.user_gmail as user_email
-      FROM payment p
-      LEFT JOIN \`order\` o ON p.order_id = o.order_id
-      LEFT JOIN user u ON o.user_id = u.user_id
+    const { rows: payments } = await db.query(
+      `
+      SELECT ${paymentSelect}
+      FROM payments p
+      LEFT JOIN orders o ON o.payment_id = p.payment_id
+      LEFT JOIN "user" u ON o.user_id = u.user_id
+      WHERE p.deleted_at IS NULL
       ORDER BY p.created_at DESC
-      LIMIT ?, ?
-    `, [offset, limit]);
+      LIMIT $1 OFFSET $2
+    `,
+      [limit, offset]
+    );
 
     res.json({
       payments,
@@ -39,341 +73,286 @@ router.get('/', verifyToken, isAdmin, async (req, res) => {
         currentPage: page,
         totalPages,
         totalPayments,
-        paymentsPerPage: limit
-      }
+        paymentsPerPage: limit,
+      },
     });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch payments' });
+    res.status(500).json({ error: "Failed to fetch payments" });
   }
 });
 
-/**
- * @route   GET /api/payments/:id
- * @desc    Lấy thông tin một thanh toán
- * @access  Private
- */
-router.get('/:id', verifyToken, async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    if (isNaN(id)) {
-      return res.status(400).json({ error: 'Invalid payment ID' });
-    }
-
-    const [payments] = await db.query(`
-      SELECT 
-        p.*,
-        o.order_hash,
-        o.order_total as order_total,
-        u.user_name,
-        u.user_gmail as user_email
-      FROM payment p
-      LEFT JOIN \`order\` o ON p.order_id = o.order_id
-      LEFT JOIN user u ON o.user_id = u.user_id
-      WHERE p.payment_id = ?
-    `, [id]);
-
-    if (payments.length === 0) {
-      return res.status(404).json({ error: 'Payment not found' });
-    }
-
-    const payment = payments[0];
-
-    // Kiểm tra quyền truy cập
-    if (!req.user.isAdmin && req.user.id !== payment.user_id) {
-      return res.status(403).json({ error: 'Unauthorized access to payment information' });
-    }
-
-    res.json(payment);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch payment' });
-  }
-});
-
-/**
- * @route   GET /api/payments/order/:orderId
- * @desc    Lấy thanh toán theo đơn hàng
- * @access  Private
- */
-router.get('/order/:orderId', verifyToken, async (req, res) => {
+router.get("/order/:orderId", verifyToken, async (req, res) => {
   try {
     const orderId = Number(req.params.orderId);
     if (isNaN(orderId)) {
-      return res.status(400).json({ error: 'Invalid order ID' });
+      return res.status(400).json({ error: "Invalid order ID" });
     }
 
-    // Lấy thông tin đơn hàng
-    const [orders] = await db.query('SELECT * FROM \`order\` WHERE order_id = ?', [orderId]);
+    const { rows: orders } = await db.query(
+      'SELECT * FROM orders WHERE order_id = $1 AND deleted_at IS NULL',
+      [orderId]
+    );
     if (orders.length === 0) {
-      return res.status(404).json({ error: 'Order not found' });
+      return res.status(404).json({ error: "Order not found" });
     }
 
     const order = orders[0];
-
-    // Kiểm tra quyền truy cập
-    if (!req.user.isAdmin && req.user.id !== order.user_id) {
-      return res.status(403).json({ error: 'Unauthorized access to order payment information' });
+    if (!isPrivilegedUser(req) && req.user.id !== order.user_id) {
+      return res.status(403).json({ error: "Unauthorized access to order payment information" });
     }
 
-    // Lấy các thanh toán của đơn hàng
-    const [payments] = await db.query('SELECT * FROM payment WHERE order_id = ? ORDER BY created_at DESC', [orderId]);
+    const { rows: payments } = await db.query(
+      `
+      SELECT ${paymentSelect}
+      FROM payments p
+      LEFT JOIN orders o ON o.payment_id = p.payment_id
+      LEFT JOIN "user" u ON o.user_id = u.user_id
+      WHERE o.order_id = $1
+        AND p.deleted_at IS NULL
+      ORDER BY p.created_at DESC
+    `,
+      [orderId]
+    );
 
     res.json({
       order_id: orderId,
       order_hash: order.order_hash,
-      payments
+      payments,
     });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch order payments' });
+    res.status(500).json({ error: "Failed to fetch order payments" });
   }
 });
 
-/**
- * @route   POST /api/payments
- * @desc    Tạo thanh toán mới
- * @access  Private
- */
-router.post('/', verifyToken, async (req, res) => {
+router.get("/:id", verifyToken, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: "Invalid payment ID" });
+    }
+
+    const { rows: payments } = await db.query(
+      `
+      SELECT ${paymentSelect}
+      FROM payments p
+      LEFT JOIN orders o ON o.payment_id = p.payment_id
+      LEFT JOIN "user" u ON o.user_id = u.user_id
+      WHERE p.payment_id = $1
+        AND p.deleted_at IS NULL
+    `,
+      [id]
+    );
+
+    if (payments.length === 0) {
+      return res.status(404).json({ error: "Payment not found" });
+    }
+
+    const payment = payments[0];
+    if (!canAccessPayment(req, payment)) {
+      return res.status(403).json({ error: "Unauthorized access to payment information" });
+    }
+
+    res.json(payment);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch payment" });
+  }
+});
+
+router.post("/", verifyToken, async (req, res) => {
   try {
     const {
       order_id,
       amount,
       payment_method,
       transaction_id,
-      payment_status, // expected: 'completed' | 'pending'
-      payment_details
+      payment_status,
+      payment_details,
     } = req.body;
 
     if (!order_id || !amount || !payment_method) {
-      return res.status(400).json({ error: 'Order ID, amount and payment method are required' });
+      return res.status(400).json({ error: "Order ID, amount and payment method are required" });
     }
 
-    // Kiểm tra đơn hàng tồn tại
-    const [orders] = await db.query('SELECT * FROM `orders` WHERE order_id = ?', [order_id]);
-    if (orders.length === 0) {
-      return res.status(404).json({ error: 'Order not found' });
+    const paymentAmount = Number(amount);
+    if (isNaN(paymentAmount) || paymentAmount <= 0) {
+      return res.status(400).json({ error: "Invalid payment amount" });
     }
 
-    const order = orders[0];
-
-    // Kiểm tra quyền truy cập
-    if (!req.user.isAdmin && req.user.id !== order.user_id) {
-      return res.status(403).json({ error: 'Unauthorized access to create payment for this order' });
-    }
-
-    // Lấy tổng tiền đã thanh toán trước đó
-    const [existingPayments] = await db.query(
-      'SELECT SUM(amount) as paid FROM payment WHERE order_id = ? AND payment_status = "completed"',
-      [order_id]
-    );
-    const paidAmount = existingPayments[0].paid || 0;
-    const remainingAmount = order.order_total - paidAmount;
-
-    if (payment_status === 'completed' && amount > remainingAmount) {
-      return res.status(400).json({
-        error: 'Payment amount exceeds remaining balance',
-        orderTotal: order.order_total,
-        paidAmount,
-        remainingAmount
-      });
-    }
-
-    // ✅ Ghi thanh toán mới
-    const [result] = await db.query(
-      `INSERT INTO payment (
-        order_id, 
-        amount, 
-        payment_method, 
-        transaction_id, 
-        payment_status, 
-        payment_details,
-        created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, NOW())`,
-      [
-        order_id,
-        amount,
-        payment_method,
-        transaction_id || null,
-        payment_status || 'pending',
-        payment_details ? JSON.stringify(payment_details) : null
-      ]
-    );
-
-    const [newPayment] = await db.query('SELECT * FROM payment WHERE payment_id = ?', [result.insertId]);
-
-    // ✅ Cập nhật trạng thái đơn hàng nếu cần
-    if (payment_status === 'completed') {
-      const [updatedPayments] = await db.query(
-        'SELECT SUM(amount) as paid FROM payment WHERE order_id = ? AND payment_status = "completed"',
+    const newPayment = await withTransaction(async (client) => {
+      const { rows: orders } = await client.query(
+        "SELECT * FROM orders WHERE order_id = $1 AND deleted_at IS NULL FOR UPDATE",
         [order_id]
       );
-      const totalPaid = updatedPayments[0].paid || 0;
-
-      let paymentStatus = 'unpaid';
-      if (totalPaid >= order.order_total) {
-        paymentStatus = 'paid';
-      } else if (totalPaid > 0) {
-        paymentStatus = 'partially_paid';
+      if (orders.length === 0) {
+        const error = new Error("Order not found");
+        error.status = 404;
+        throw error;
       }
 
-      // ✅ Nếu là thanh toán COD thì đơn hàng đã trả đủ ngay
-      // ✅ Nếu là MOMO / VNPAY thanh toán completed cũng là trả đủ
-      const currentStatus = 'PENDING';
+      const order = orders[0];
+      if (!isPrivilegedUser(req) && req.user.id !== order.user_id) {
+        const error = new Error("Unauthorized access to create payment for this order");
+        error.status = 403;
+        throw error;
+      }
 
-      await db.query(
-        'UPDATE `order` SET payment_status = ?, current_status = ? WHERE order_id = ?',
-        [paymentStatus, currentStatus, order_id]
+      const orderTotal = Number(order.order_final_total || order.order_total || 0);
+      if (payment_status === "completed" && orderTotal > 0 && paymentAmount > orderTotal) {
+        const error = new Error("Payment amount exceeds order total");
+        error.status = 400;
+        error.details = { orderTotal, paymentAmount };
+        throw error;
+      }
+
+      const { rows: insertedPayments } = await client.query(
+        `
+        INSERT INTO payments (
+          payment_method,
+          payment_status,
+          payment_amount,
+          payment_transaction_id,
+          payment_info
+        )
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING payment_id
+      `,
+        [
+          payment_method,
+          payment_status || "pending",
+          paymentAmount,
+          transaction_id || null,
+          normalizePaymentInfo(payment_details) || null,
+        ]
       );
-    }
+
+      const paymentId = insertedPayments[0].payment_id;
+      await client.query(
+        "UPDATE orders SET payment_id = $1, updated_at = NOW() WHERE order_id = $2",
+        [paymentId, order_id]
+      );
+
+      const { rows: payments } = await client.query(
+        `
+        SELECT ${paymentSelect}
+        FROM payments p
+        LEFT JOIN orders o ON o.payment_id = p.payment_id
+        LEFT JOIN "user" u ON o.user_id = u.user_id
+        WHERE p.payment_id = $1
+      `,
+        [paymentId]
+      );
+
+      return payments[0];
+    });
 
     return res.status(201).json({
-      message: 'Payment created successfully',
-      payment: newPayment[0]
+      message: "Payment created successfully",
+      payment: newPayment,
     });
   } catch (error) {
-    return res.status(500).json({ error: 'Failed to create payment' });
+    return res.status(error.status || 500).json({
+      error: error.status ? error.message : "Failed to create payment",
+      ...(error.details ? error.details : {}),
+    });
   }
 });
 
-/**
- * @route   PUT /api/payments/:id
- * @desc    Cập nhật thông tin thanh toán
- * @access  Private (Admin only)
- */
-router.put('/:id', verifyToken, isAdmin, async (req, res) => {
+router.put("/:id", verifyToken, isAdmin, async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (isNaN(id)) {
-      return res.status(400).json({ error: 'Invalid payment ID' });
+      return res.status(400).json({ error: "Invalid payment ID" });
     }
 
-    const { transaction_id, payment_status, payment_details } = req.body;
+    const { transaction_id, payment_status, payment_details, amount, payment_method } = req.body;
 
-    // Kiểm tra thanh toán tồn tại
-    const [payments] = await db.query('SELECT * FROM payment WHERE payment_id = ?', [id]);
-    if (payments.length === 0) {
-      return res.status(404).json({ error: 'Payment not found' });
-    }
-
-    const payment = payments[0];
-
-    // Cập nhật thanh toán
     const updates = [];
     const values = [];
 
-    if (transaction_id !== undefined) {
-      updates.push('transaction_id = ?');
-      values.push(transaction_id);
-    }
+    const addUpdate = (column, value) => {
+      values.push(value);
+      updates.push(`${column} = $${values.length}`);
+    };
 
-    if (payment_status !== undefined) {
-      updates.push('payment_status = ?');
-      values.push(payment_status);
+    if (transaction_id !== undefined) addUpdate("payment_transaction_id", transaction_id);
+    if (payment_status !== undefined) addUpdate("payment_status", payment_status);
+    if (payment_details !== undefined) addUpdate("payment_info", normalizePaymentInfo(payment_details));
+    if (amount !== undefined) {
+      const paymentAmount = Number(amount);
+      if (isNaN(paymentAmount) || paymentAmount <= 0) {
+        return res.status(400).json({ error: "Invalid payment amount" });
+      }
+      addUpdate("payment_amount", paymentAmount);
     }
-
-    if (payment_details !== undefined) {
-      updates.push('payment_details = ?');
-      values.push(JSON.stringify(payment_details));
-    }
-
-    updates.push('updated_at = NOW()');
+    if (payment_method !== undefined) addUpdate("payment_method", payment_method);
 
     if (updates.length === 0) {
-      return res.status(400).json({ error: 'No update data provided' });
+      return res.status(400).json({ error: "No update data provided" });
     }
 
     values.push(id);
-
-    await db.query(
-      `UPDATE payment SET ${updates.join(', ')} WHERE payment_id = ?`,
+    const { rowCount } = await db.query(
+      `
+      UPDATE payments
+      SET ${updates.join(", ")}, updated_at = NOW()
+      WHERE payment_id = $${values.length}
+        AND deleted_at IS NULL
+    `,
       values
     );
 
-    // Lấy thông tin thanh toán đã cập nhật
-    const [updatedPayment] = await db.query('SELECT * FROM payment WHERE payment_id = ?', [id]);
-
-    // Nếu trạng thái thanh toán thay đổi, cập nhật trạng thái đơn hàng
-    if (payment_status !== undefined && payment_status !== payment.payment_status) {
-      const orderId = payment.order_id;
-
-      // Lấy đơn hàng
-      const [orders] = await db.query('SELECT * FROM \`order\` WHERE order_id = ?', [orderId]);
-      if (orders.length > 0) {
-        const order = orders[0];
-
-        // Tính lại tổng số tiền đã thanh toán
-        const [updatedPayments] = await db.query('SELECT SUM(amount) as paid FROM payment WHERE order_id = ? AND payment_status = "completed"', [orderId]);
-        const totalPaid = updatedPayments[0].paid || 0;
-
-        // Cập nhật trạng thái thanh toán của đơn hàng
-        let paymentStatus = 'unpaid';
-        if (totalPaid >= order.order_total) {
-          paymentStatus = 'paid';
-        } else if (totalPaid > 0) {
-          paymentStatus = 'partially_paid';
-        }
-
-        await db.query('UPDATE \`order\` SET payment_status = ? WHERE order_id = ?', [paymentStatus, orderId]);
-      }
+    if (rowCount === 0) {
+      return res.status(404).json({ error: "Payment not found" });
     }
 
+    const { rows: updatedPayment } = await db.query(
+      `
+      SELECT ${paymentSelect}
+      FROM payments p
+      LEFT JOIN orders o ON o.payment_id = p.payment_id
+      LEFT JOIN "user" u ON o.user_id = u.user_id
+      WHERE p.payment_id = $1
+    `,
+      [id]
+    );
+
     res.json({
-      message: 'Payment updated successfully',
-      payment: updatedPayment[0]
+      message: "Payment updated successfully",
+      payment: updatedPayment[0],
     });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to update payment' });
+    res.status(500).json({ error: "Failed to update payment" });
   }
 });
 
-/**
- * @route   DELETE /api/payments/:id
- * @desc    Xóa thanh toán
- * @access  Private (Admin only)
- */
-router.delete('/:id', verifyToken, isAdmin, async (req, res) => {
+router.delete("/:id", verifyToken, isAdmin, async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (isNaN(id)) {
-      return res.status(400).json({ error: 'Invalid payment ID' });
+      return res.status(400).json({ error: "Invalid payment ID" });
     }
 
-    // Kiểm tra thanh toán tồn tại
-    const [payments] = await db.query('SELECT * FROM payment WHERE payment_id = ?', [id]);
-    if (payments.length === 0) {
-      return res.status(404).json({ error: 'Payment not found' });
-    }
-
-    const payment = payments[0];
-    const orderId = payment.order_id;
-
-    // Xóa thanh toán
-    await db.query('DELETE FROM payment WHERE payment_id = ?', [id]);
-
-    // Cập nhật trạng thái đơn hàng
-    // Lấy đơn hàng
-    const [orders] = await db.query('SELECT * FROM \`order\` WHERE order_id = ?', [orderId]);
-    if (orders.length > 0) {
-      const order = orders[0];
-
-      // Tính lại tổng số tiền đã thanh toán
-      const [updatedPayments] = await db.query('SELECT SUM(amount) as paid FROM payment WHERE order_id = ? AND payment_status = "completed"', [orderId]);
-      const totalPaid = updatedPayments[0].paid || 0;
-
-      // Cập nhật trạng thái thanh toán của đơn hàng
-      let paymentStatus = 'unpaid';
-      if (totalPaid >= order.order_total) {
-        paymentStatus = 'paid';
-      } else if (totalPaid > 0) {
-        paymentStatus = 'partially_paid';
+    await withTransaction(async (client) => {
+      const { rows: payments } = await client.query(
+        "SELECT payment_id FROM payments WHERE payment_id = $1 AND deleted_at IS NULL FOR UPDATE",
+        [id]
+      );
+      if (payments.length === 0) {
+        const error = new Error("Payment not found");
+        error.status = 404;
+        throw error;
       }
 
-      await db.query('UPDATE \`order\` SET payment_status = ? WHERE order_id = ?', [paymentStatus, orderId]);
-    }
+      await client.query("UPDATE orders SET payment_id = NULL, updated_at = NOW() WHERE payment_id = $1", [id]);
+      await client.query("DELETE FROM payments WHERE payment_id = $1", [id]);
+    });
 
-    res.json({ message: 'Payment deleted successfully' });
+    res.json({ message: "Payment deleted successfully" });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to delete payment' });
+    res.status(error.status || 500).json({
+      error: error.status ? error.message : "Failed to delete payment",
+    });
   }
 });
 
-module.exports = router; 
+module.exports = router;

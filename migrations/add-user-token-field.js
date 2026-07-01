@@ -1,67 +1,54 @@
 /**
- * Migration script để thêm trường user_token vào bảng user
- * Chạy script này bằng lệnh: node migrations/add-user-token-field.js
+ * Migration script to ensure `user_token` and `updated_at` exist in table `"user"`.
+ * Run: node migrations/add-user-token-field.js
  */
 
-const db = require('../config/database');
+const db = require("../config/database");
+
+async function columnExists(columnName) {
+  const { rows } = await db.query(
+    `
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'user'
+      AND column_name = $1
+    LIMIT 1
+    `,
+    [columnName]
+  );
+
+  return rows.length > 0;
+}
 
 async function addUserTokenField() {
   try {
-    console.log('Bắt đầu migration: Thêm trường user_token vào bảng user');
+    console.log("Starting migration: ensure user_token and updated_at columns on \"user\"");
 
-    // Kiểm tra xem trường user_token đã tồn tại trong bảng user chưa
-    const [columns] = await db.query(`
-      SELECT COLUMN_NAME 
-      FROM INFORMATION_SCHEMA.COLUMNS 
-      WHERE TABLE_SCHEMA = DATABASE() 
-      AND TABLE_NAME = 'user' 
-      AND COLUMN_NAME = 'user_token'
-    `);
-
-    // Nếu trường user_token chưa tồn tại, thêm nó vào
-    if (columns.length === 0) {
-      console.log('Trường user_token chưa tồn tại. Đang thêm trường...');
-      
-      await db.query(`
-        ALTER TABLE user 
-        ADD COLUMN user_token TEXT DEFAULT NULL COMMENT 'JWT token của người dùng'
-      `);
-      
-      console.log('Đã thêm trường user_token vào bảng user thành công');
+    const hasUserToken = await columnExists("user_token");
+    if (!hasUserToken) {
+      await db.query('ALTER TABLE "user" ADD COLUMN user_token VARCHAR(255)');
+      console.log("Added column: user_token");
     } else {
-      console.log('Trường user_token đã tồn tại trong bảng user');
+      console.log("Column already exists: user_token");
     }
 
-    // Kiểm tra xem trường updated_at đã tồn tại trong bảng user chưa
-    const [updatedAtColumns] = await db.query(`
-      SELECT COLUMN_NAME 
-      FROM INFORMATION_SCHEMA.COLUMNS 
-      WHERE TABLE_SCHEMA = DATABASE() 
-      AND TABLE_NAME = 'user' 
-      AND COLUMN_NAME = 'updated_at'
-    `);
-
-    // Nếu trường updated_at chưa tồn tại, thêm nó vào
-    if (updatedAtColumns.length === 0) {
-      console.log('Trường updated_at chưa tồn tại. Đang thêm trường...');
-      
-      await db.query(`
-        ALTER TABLE user 
-        ADD COLUMN updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Thời gian cập nhật'
-      `);
-      
-      console.log('Đã thêm trường updated_at vào bảng user thành công');
+    const hasUpdatedAt = await columnExists("updated_at");
+    if (!hasUpdatedAt) {
+      await db.query(
+        'ALTER TABLE "user" ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP'
+      );
+      console.log("Added column: updated_at");
     } else {
-      console.log('Trường updated_at đã tồn tại trong bảng user');
+      console.log("Column already exists: updated_at");
     }
 
-    console.log('Migration hoàn tất');
+    console.log("Migration completed");
     process.exit(0);
   } catch (error) {
-    console.error('Lỗi khi thực hiện migration:', error);
+    console.error("Migration failed:", error);
     process.exit(1);
   }
 }
 
-// Chạy migration
-addUserTokenField(); 
+addUserTokenField();

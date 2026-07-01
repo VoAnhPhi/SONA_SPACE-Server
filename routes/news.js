@@ -4,84 +4,188 @@ const db = require("../config/database");
 const { verifyToken, isAdmin } = require("../middleware/auth");
 const cloudinary = require("cloudinary").v2;
 
+function parsePageAndLimit(query) {
+  const page = Number.parseInt(query.page, 10);
+  const limit = Number.parseInt(query.limit, 10);
+
+  const safePage = Number.isInteger(page) && page > 0 ? page : 1;
+  const safeLimit = Number.isInteger(limit) && limit > 0 ? limit : 10;
+
+  return {
+    page: safePage,
+    limit: safeLimit,
+    offset: (safePage - 1) * safeLimit,
+  };
+}
+
+function buildNewsFilters({
+  categoryId,
+  keyword,
+  status,
+  allowStatusFilter,
+  publishedOnlyByDefault,
+  keywordMode,
+}) {
+  const conditions = [];
+  const params = [];
+
+  if (categoryId !== undefined) {
+    const parsedCategoryId = Number.parseInt(categoryId, 10);
+    if (!Number.isInteger(parsedCategoryId)) {
+      return { error: "Invalid category ID" };
+    }
+
+    params.push(parsedCategoryId);
+    conditions.push(`n.news_category_id = $${params.length}`);
+  }
+
+  if (keyword) {
+    const likeKeyword = `%${keyword}%`;
+
+    if (keywordMode === "titleAndContent") {
+      params.push(likeKeyword);
+      const titleIndex = params.length;
+      params.push(likeKeyword);
+      const contentIndex = params.length;
+      conditions.push(
+        `(n.news_title ILIKE $${titleIndex} OR n.news_content ILIKE $${contentIndex})`
+      );
+    } else {
+      params.push(likeKeyword);
+      conditions.push(`n.news_title ILIKE $${params.length}`);
+    }
+  }
+
+  if (allowStatusFilter && status !== undefined) {
+    const parsedStatus = Number.parseInt(status, 10);
+    if (!Number.isInteger(parsedStatus)) {
+      return { error: "Invalid status value" };
+    }
+
+    params.push(parsedStatus);
+    conditions.push(`n.news_status = $${params.length}`);
+  } else if (publishedOnlyByDefault) {
+    conditions.push("n.news_status = 1");
+  }
+
+  const whereClause =
+    conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
+  return {
+    whereClause,
+    params,
+  };
+}
+
+function generateSlug(text) {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\u0111/g, "d")
+    .replace(/[^a-z0-9\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/\-+/g, "-");
+}
+
+function normalizeNewsImages(images) {
+  if (Array.isArray(images)) {
+    const normalized = images.filter(Boolean).slice(0, 5);
+    return normalized.length > 0 ? JSON.stringify(normalized) : null;
+  }
+
+  return images || null;
+}
+
+function getImageInContent(content) {
+  const imgRegex = /<img[^>]+src=['\"]([^'\"]+)['\"]/g;
+  let matches;
+  const links = [];
+
+  while ((matches = imgRegex.exec(content || "")) !== null) {
+    links.push(matches[1]);
+  }
+
+  return links;
+}
+
+function getCloudinaryPublicId(url) {
+  if (!url) {
+    return null;
+  }
+
+  const match = url.match(/\/upload\/v\d+\/(.+?)\.(jpg|jpeg|png|webp)$/i);
+  return match ? match[1] : null;
+}
+
 /**
  * @route   GET /api/news
- * @desc    Lấy danh sách bài viết
+ * @desc    Lay danh sach bai viet
  * @access  Public
  */
 router.get("/", async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
-    const offset = (page - 1) * limit;
+    const { page, limit, offset } = parsePageAndLimit(req.query);
 
-    const conditions = [];
-    const queryParams = [];
+    const filters = buildNewsFilters({
+      categoryId: req.query.category_id,
+      keyword: req.query.keyword,
+      status: req.query.status,
+      allowStatusFilter: Boolean(req.user && req.user.isAdmin),
+      publishedOnlyByDefault: !(req.user && req.user.isAdmin),
+      keywordMode: "titleAndContent",
+    });
 
-    // Lọc theo danh mục
-    if (req.query.category_id) {
-      conditions.push("n.news_category_id = ?");
-      queryParams.push(Number(req.query.category_id));
+    if (filters.error) {
+      return res.status(400).json({ error: filters.error });
     }
 
-    // Lọc theo từ khóa
-    if (req.query.keyword) {
-      conditions.push("(n.news_title LIKE ? OR n.news_content LIKE ?)");
-      const keyword = `%${req.query.keyword}%`;
-      queryParams.push(keyword, keyword);
-    }
+    const { whereClause, params } = filters;
 
-    // Lọc theo trạng thái
-    if (req.user && req.user.isAdmin) {
-      if (req.query.status) {
-        conditions.push("n.news_status = ?");
-        queryParams.push(req.query.status);
-      }
-    } else {
-      conditions.push("n.news_status = 1");
-    }
-
-    const whereClause =
-      conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-
-    // Đếm tổng số bài viết
-    const [countResult] = await db.query(
+    const { rows: countRows } = await db.query(
       `
-      SELECT COUNT(*) as total
+      SELECT COUNT(*)::int AS total
       FROM news n
       LEFT JOIN news_category c ON n.news_category_id = c.news_category_id
       ${whereClause}
-    `,
-      queryParams
+      `,
+      params
     );
 
-    const totalNews = countResult[0].total;
+    const totalNews = Number(countRows[0]?.total || 0);
     const totalPages = Math.ceil(totalNews / limit);
 
-    // Lấy danh sách bài viết kèm tên danh mục
-    const paginationParams = [...queryParams, offset, limit];
-    const [news] = await db.query(
+    const listParams = [...params, limit, offset];
+    const limitIndex = `$${params.length + 1}`;
+    const offsetIndex = `$${params.length + 2}`;
+
+    const { rows: news } = await db.query(
       `
-      SELECT 
+      SELECT
         n.*,
         c.news_category_name AS category_name
       FROM news n
       LEFT JOIN news_category c ON n.news_category_id = c.news_category_id
       ${whereClause}
       ORDER BY n.created_at DESC
-      LIMIT ?, ?
-    `,
-      paginationParams
+      LIMIT ${limitIndex} OFFSET ${offsetIndex}
+      `,
+      listParams
     );
 
     const processedNews = news.map((item) => {
       if (item.news_content && !item.news_description) {
-        item.news_description = item.news_content.substring(0, 150) + "...";
+        return {
+          ...item,
+          news_description: `${item.news_content.substring(0, 150)}...`,
+        };
       }
+
       return item;
     });
 
-    res.json({
+    return res.json({
       news: processedNews,
       pagination: {
         currentPage: page,
@@ -93,59 +197,49 @@ router.get("/", async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch news" });
+    return res.status(500).json({ error: "Failed to fetch news" });
   }
 });
 
 router.get("/simple", async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
-    const offset = (page - 1) * limit;
+    const { page, limit, offset } = parsePageAndLimit(req.query);
 
-    const conditions = [];
-    const queryParams = [];
+    const filters = buildNewsFilters({
+      categoryId: req.query.category_id,
+      keyword: req.query.keyword,
+      status: req.query.status,
+      allowStatusFilter: Boolean(req.user && req.user.isAdmin),
+      publishedOnlyByDefault: !(req.user && req.user.isAdmin),
+      keywordMode: "titleOnly",
+    });
 
-    if (req.query.category_id) {
-      conditions.push("n.news_category_id = ?");
-      queryParams.push(Number(req.query.category_id));
+    if (filters.error) {
+      return res.status(400).json({ error: filters.error });
     }
 
-    if (req.query.keyword) {
-      conditions.push("n.news_title LIKE ?");
-      const keyword = `%${req.query.keyword}%`;
-      queryParams.push(keyword);
-    }
+    const { whereClause, params } = filters;
 
-    if (req.user && req.user.isAdmin) {
-      if (req.query.status) {
-        conditions.push("n.news_status = ?");
-        queryParams.push(req.query.status);
-      }
-    } else {
-      conditions.push("n.news_status = 1");
-    }
-
-    const whereClause =
-      conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-
-    const [countResult] = await db.query(
+    const { rows: countRows } = await db.query(
       `
-      SELECT COUNT(*) as total
+      SELECT COUNT(*)::int AS total
       FROM news n
       LEFT JOIN news_category c ON n.news_category_id = c.news_category_id
       ${whereClause}
-    `,
-      queryParams
+      `,
+      params
     );
 
-    const totalNews = countResult[0].total;
+    const totalNews = Number(countRows[0]?.total || 0);
     const totalPages = Math.ceil(totalNews / limit);
 
-    const paginationParams = [...queryParams, offset, limit];
-    const [newsRaw] = await db.query(
+    const listParams = [...params, limit, offset];
+    const limitIndex = `$${params.length + 1}`;
+    const offsetIndex = `$${params.length + 2}`;
+
+    const { rows: newsRaw } = await db.query(
       `
-      SELECT 
+      SELECT
         n.news_id,
         n.news_image,
         n.news_title,
@@ -159,26 +253,24 @@ router.get("/simple", async (req, res) => {
       LEFT JOIN news_category c ON n.news_category_id = c.news_category_id
       ${whereClause}
       ORDER BY n.created_at DESC
-      LIMIT ?, ?
-    `,
-      paginationParams
+      LIMIT ${limitIndex} OFFSET ${offsetIndex}
+      `,
+      listParams
     );
 
-    const news = newsRaw.map((item) => {
-      return {
-        news_id: item.news_id,
-        news_image: item.news_image,
-        news_title: item.news_title,
-        news_slug: item.news_slug,
-        news_view: item.news_view,
-        news_status: item.news_status,
-        created_at: item.created_at,
-        updated_at: item.updated_at,
-        category_name: item.category_name,
-      };
-    });
+    const news = newsRaw.map((item) => ({
+      news_id: item.news_id,
+      news_image: item.news_image,
+      news_title: item.news_title,
+      news_slug: item.news_slug,
+      news_view: item.news_view,
+      news_status: item.news_status,
+      created_at: item.created_at,
+      updated_at: item.updated_at,
+      category_name: item.category_name,
+    }));
 
-    res.json({
+    return res.json({
       news,
       pagination: {
         currentPage: page,
@@ -190,50 +282,49 @@ router.get("/simple", async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch news" });
+    return res.status(500).json({ error: "Failed to fetch news" });
   }
 });
 
 router.get("/admin", verifyToken, isAdmin, async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
-    const offset = (page - 1) * limit;
+    const { page, limit, offset } = parsePageAndLimit(req.query);
 
-    const conditions = [];
-    const queryParams = [];
+    const filters = buildNewsFilters({
+      categoryId: req.query.category_id,
+      keyword: req.query.keyword,
+      status: req.query.status,
+      allowStatusFilter: true,
+      publishedOnlyByDefault: false,
+      keywordMode: "titleOnly",
+    });
 
-    if (req.query.category_id) {
-      conditions.push("n.news_category_id = ?");
-      queryParams.push(Number(req.query.category_id));
+    if (filters.error) {
+      return res.status(400).json({ error: filters.error });
     }
 
-    if (req.query.keyword) {
-      conditions.push("n.news_title LIKE ?");
-      const keyword = `%${req.query.keyword}%`;
-      queryParams.push(keyword);
-    }
+    const { whereClause, params } = filters;
 
-    const whereClause =
-      conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-
-    const [countResult] = await db.query(
+    const { rows: countRows } = await db.query(
       `
-      SELECT COUNT(*) as total
+      SELECT COUNT(*)::int AS total
       FROM news n
       LEFT JOIN news_category c ON n.news_category_id = c.news_category_id
       ${whereClause}
-    `,
-      queryParams
+      `,
+      params
     );
 
-    const totalNews = countResult[0].total;
+    const totalNews = Number(countRows[0]?.total || 0);
     const totalPages = Math.ceil(totalNews / limit);
 
-    const paginationParams = [...queryParams, offset, limit];
-    const [newsRaw] = await db.query(
+    const listParams = [...params, limit, offset];
+    const limitIndex = `$${params.length + 1}`;
+    const offsetIndex = `$${params.length + 2}`;
+
+    const { rows: newsRaw } = await db.query(
       `
-      SELECT 
+      SELECT
         n.news_id,
         n.news_image,
         n.news_title,
@@ -247,26 +338,24 @@ router.get("/admin", verifyToken, isAdmin, async (req, res) => {
       LEFT JOIN news_category c ON n.news_category_id = c.news_category_id
       ${whereClause}
       ORDER BY n.created_at DESC
-      LIMIT ?, ?
-    `,
-      paginationParams
+      LIMIT ${limitIndex} OFFSET ${offsetIndex}
+      `,
+      listParams
     );
 
-    const news = newsRaw.map((item) => {
-      return {
-        news_id: item.news_id,
-        news_image: item.news_image,
-        news_title: item.news_title,
-        news_slug: item.news_slug,
-        news_view: item.news_view,
-        news_status: item.news_status,
-        created_at: item.created_at,
-        updated_at: item.updated_at,
-        category_name: item.category_name,
-      };
-    });
+    const news = newsRaw.map((item) => ({
+      news_id: item.news_id,
+      news_image: item.news_image,
+      news_title: item.news_title,
+      news_slug: item.news_slug,
+      news_view: item.news_view,
+      news_status: item.news_status,
+      created_at: item.created_at,
+      updated_at: item.updated_at,
+      category_name: item.category_name,
+    }));
 
-    res.json({
+    return res.json({
       news,
       pagination: {
         currentPage: page,
@@ -278,158 +367,75 @@ router.get("/admin", verifyToken, isAdmin, async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch news" });
+    return res.status(500).json({ error: "Failed to fetch news" });
   }
 });
 
 router.get("/views", async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
-    const offset = (page - 1) * limit;
+    const { page, limit, offset } = parsePageAndLimit(req.query);
 
-    // Lấy danh sách tin theo view tăng dần, phân trang
-    const [news] = await db.query(
+    const { rows: news } = await db.query(
       `
       SELECT n.*
       FROM news n
       ORDER BY n.news_view DESC
-      LIMIT ?, ?
-    `,
-      [offset, limit]
+      LIMIT $1 OFFSET $2
+      `,
+      [limit, offset]
     );
 
-    // Trả về dữ liệu có trong response
-    res.json({
+    return res.json({
       news,
       pagination: {
         currentPage: page,
         newsPerPage: limit,
-        // Có thể thêm tổng số tin nếu cần
       },
     });
   } catch (error) {
-    res.status(500).json({ error: "Lấy danh sách tin thất bại" });
+    return res.status(500).json({ error: "Failed to fetch viewed news" });
   }
 });
-/**
- * @route   GET /api/news/:id
- * @desc    Lấy chi tiết bài viết
- * @access  Public
- */
-// router.get('/:id', async (req, res) => {
-//   try {
-//     const id = req.params.id;
-
-//     // Hỗ trợ tìm theo ID hoặc slug
-//     const isNumeric = /^\d+$/.test(id);
-
-//     let query;
-//     let params;
-
-//     if (isNumeric) {
-//       query = 'n.news_id = ?';
-//       params = [Number(id)];
-//     } else {
-//       query = 'n.news_slug = ?';
-//       params = [id];
-//     }
-
-//     // Lấy thông tin bài viết
-//     const [news] = await db.query(`
-//       SELECT
-//         n.*,
-//         u.user_name as author_name,
-//         u.user_gmail as author_email,
-//         COUNT(DISTINCT c.comment_id) as comment_count
-//       FROM news n
-//       LEFT JOIN user u ON n.author_id = u.user_id
-//       LEFT JOIN comment c ON c.news_id = n.news_id
-//       WHERE n.news_id = ?
-//       GROUP BY n.news_id
-//     `, [id]);
-
-//     if (news.length === 0) {
-//       return res.status(404).json({ error: 'News article not found' });
-//     }
-
-//     const newsItem = news[0];
-
-//     // Kiểm tra quyền truy cập với bài viết chưa công khai
-//     if (newsItem.news_status !== 1 && (!req.user || !req.user.isAdmin)) {
-//       return res.status(403).json({ error: 'You do not have permission to access this article' });
-//     }
-
-//     // Tăng lượt xem
-//     await db.query('UPDATE news SET news_view = news_view + 1 WHERE news_id = ?', [newsItem.news_id]);
-
-//     // Lấy bài viết liên quan
-//     const [relatedNews] = await db.query(`
-//       SELECT
-//         n.*,
-//         u.user_name as author_name,
-//         u.user_gmail as author_email
-//       FROM news n
-//       LEFT JOIN user u ON n.author_id = u.user_id
-//       WHERE n.news_category_id = ? AND n.news_id != ?
-//       ORDER BY n.created_at DESC
-//       LIMIT 5
-//     `, [newsItem.news_category_id, newsItem.news_id]);
-
-//     res.json({
-//       ...newsItem,
-//       related_news: relatedNews
-//     });
-//   } catch (error) {
-//     console.error('Error fetching news article:', error);
-//     res.status(500).json({ error: 'Failed to fetch news article' });
-//   }
-// });
 
 /**
  * @route   GET /api/news/category/:categoryId
- * @desc    Lấy bài viết theo danh mục
+ * @desc    Lay bai viet theo danh muc
  * @access  Public
  */
 router.get("/category/:categoryId", async (req, res) => {
   try {
-    const categoryId = Number(req.params.categoryId);
+    const categoryId = Number.parseInt(req.params.categoryId, 10);
 
-    if (isNaN(categoryId)) {
+    if (!Number.isInteger(categoryId)) {
       return res.status(400).json({ error: "Invalid category ID" });
     }
 
-    // Phân trang
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
-    const offset = (page - 1) * limit;
+    const { page, limit, offset } = parsePageAndLimit(req.query);
 
-    // Đếm tổng số bài viết trong danh mục
-    const [countResult] = await db.query(
+    const { rows: countRows } = await db.query(
       `
-      SELECT COUNT(*) as total 
+      SELECT COUNT(*)::int AS total
       FROM news n
-      WHERE n.news_category_id = ? AND n.news_status = 1
-    `,
+      WHERE n.news_category_id = $1 AND n.news_status = 1
+      `,
       [categoryId]
     );
 
-    const totalNews = countResult[0].total;
+    const totalNews = Number(countRows[0]?.total || 0);
     const totalPages = Math.ceil(totalNews / limit);
 
-    // Lấy danh sách bài viết
-    const [news] = await db.query(
+    const { rows: news } = await db.query(
       `
       SELECT n.*
       FROM news n
-      WHERE n.news_category_id = ? AND n.news_status = 1
+      WHERE n.news_category_id = $1 AND n.news_status = 1
       ORDER BY n.created_at DESC
-      LIMIT ?, ?
-    `,
-      [categoryId, offset, limit]
+      LIMIT $2 OFFSET $3
+      `,
+      [categoryId, limit, offset]
     );
 
-    res.json({
+    return res.json({
       news,
       pagination: {
         currentPage: page,
@@ -441,134 +447,131 @@ router.get("/category/:categoryId", async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch news by category" });
+    return res.status(500).json({ error: "Failed to fetch news by category" });
   }
 });
 
 /**
  * @route   POST /api/news
- * @desc    Tạo bài viết mới
- * @access  Private (Admin only)
+ * @desc    Tao bai viet moi
+ * @access  Private
  */
-
-function generateSlug(text) {
-  return text
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/đ/g, "d")
-    .replace(/[^a-z0-9\s-]/g, "")
-    .trim()
-    .replace(/\s+/g, "-")
-    .replace(/\-+/g, "-");
-}
 router.post("/", verifyToken, async (req, res) => {
   try {
     const { title, slug, content, images, category_id, status } = req.body;
 
     if (!title || !content) {
-      return res
-        .status(400)
-        .json({ error: "Tiêu đề và nội dung là bắt buộc." });
+      return res.status(400).json({ error: "Title and content are required." });
     }
 
-    if (!images) {
-      return res.status(400).json({ error: "Ảnh là bắt buộc." });
+    const normalizedImages = normalizeNewsImages(images);
+    if (!normalizedImages) {
+      return res.status(400).json({ error: "Image is required." });
     }
 
-    // Tạo slug từ title nếu không có, hoặc chuẩn hóa slug người nhập
     let newsSlug = generateSlug(slug || title);
 
-    // Kiểm tra trùng slug trong DB
-    const [slugExists] = await db.query(
-      "SELECT news_id FROM news WHERE news_slug = ?",
+    const { rows: slugExists } = await db.query(
+      "SELECT news_id FROM news WHERE news_slug = $1 LIMIT 1",
       [newsSlug]
     );
+
     if (slugExists.length > 0) {
       newsSlug = `${newsSlug}-${Date.now().toString().slice(-6)}`;
     }
 
-    // INSERT không cần trường excerpt nữa
-    const [result] = await db.query(
+    const parsedCategoryId =
+      category_id !== undefined && category_id !== null && category_id !== ""
+        ? Number.parseInt(category_id, 10)
+        : null;
+
+    if (parsedCategoryId !== null && !Number.isInteger(parsedCategoryId)) {
+      return res.status(400).json({ error: "Invalid category ID" });
+    }
+
+    const parsedStatus =
+      status !== undefined && status !== null && status !== ""
+        ? Number.parseInt(status, 10)
+        : 1;
+
+    if (!Number.isInteger(parsedStatus)) {
+      return res.status(400).json({ error: "Invalid status value" });
+    }
+
+    const { rows: insertRows } = await db.query(
       `
-        INSERT INTO news (
-          news_title,
-          news_slug,
-          news_content,
-          news_image,
-          news_category_id,
-          news_author,
-          news_comment,
-          news_status,
-          created_at,
-          updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, 0, ?, NOW(), NOW())
+      INSERT INTO news (
+        news_title,
+        news_slug,
+        news_content,
+        news_image,
+        news_category_id,
+        news_author,
+        news_status,
+        created_at,
+        updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+      RETURNING news_id
       `,
       [
         title,
         newsSlug,
         content,
-        images,
-        category_id || null,
-        req.user.id,
-        status || 1,
+        normalizedImages,
+        parsedCategoryId,
+        String(req.user.id),
+        parsedStatus,
       ]
     );
 
-    const [newNews] = await db.query(
+    const createdNewsId = insertRows[0].news_id;
+
+    const { rows: newNewsRows } = await db.query(
       `
-      SELECT 
-        n.*, 
+      SELECT
+        n.*,
         u.user_name AS author_name,
         c.news_category_name AS category_name
       FROM news n
-      LEFT JOIN user u ON n.news_author = u.user_id
+      LEFT JOIN "user" u
+        ON n.news_author ~ '^[0-9]+$'
+       AND n.news_author::int = u.user_id
       LEFT JOIN news_category c ON n.news_category_id = c.news_category_id
-      WHERE n.news_id = ?
-    `,
-      [result.insertId]
+      WHERE n.news_id = $1
+      `,
+      [createdNewsId]
     );
 
-    res.status(201).json({
-      message: "Tạo tin tức thành công.",
-      news: newNews[0],
+    return res.status(201).json({
+      message: "News article created successfully.",
+      news: newNewsRows[0],
     });
   } catch (error) {
-    res.status(500).json({ error: "Không thể tạo tin tức." });
+    return res.status(500).json({ error: "Cannot create news article." });
   }
 });
 
-/**
- * @route   PUT /api/news/:id
- * @desc    Cập nhật bài viết
- * @access  Private (Admin only)
- */
 // GET /api/news/:slug
 router.get("/:slug", async (req, res) => {
   try {
     const slug = req.params.slug;
 
-    // Tăng view trước khi lấy dữ liệu
     await db.query(
-      `UPDATE news SET news_view = news_view + 1 WHERE news_slug = ?`,
+      "UPDATE news SET news_view = news_view + 1, updated_at = NOW() WHERE news_slug = $1",
       [slug]
     );
 
-    const [result] = await db.query(
-      `SELECT *
-      FROM news WHERE news_slug = ?`,
-      [slug]
-    );
+    const { rows } = await db.query("SELECT * FROM news WHERE news_slug = $1", [
+      slug,
+    ]);
 
-    if (result.length === 0) {
+    if (!rows.length) {
       return res.status(404).json({ error: "News not found" });
     }
 
-    const newsItem = result[0];
-
-    res.json(newsItem);
-  } catch (err) {
-    res.status(500).json({ error: "Internal server error" });
+    return res.json(rows[0]);
+  } catch (error) {
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -576,66 +579,33 @@ router.get("/:slug", async (req, res) => {
 router.put("/:slug", verifyToken, async (req, res) => {
   try {
     const slugParam = req.params.slug;
-    const [existingNews] = await db.query(
-      "SELECT * FROM news WHERE news_slug = ?",
+    const { rows: existingRows } = await db.query(
+      "SELECT * FROM news WHERE news_slug = $1",
       [slugParam]
     );
 
-    if (existingNews.length === 0) {
+    if (!existingRows.length) {
       return res.status(404).json({ error: "News article not found" });
     }
 
-    const newsItem = existingNews[0];
+    const newsItem = existingRows[0];
     const id = newsItem.news_id;
 
-    const {
-      title,
-      slug,
-      content,
-      images,
-      category_id,
-      tags,
-      status,
-      meta_title,
-      meta_description,
-    } = req.body;
+    const { title, slug, content, images, category_id, status } = req.body;
 
-    // Slug logic
     let newsSlug = slug;
     if (!slug && title) {
-      newsSlug = title
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/đ/g, "d")
-        .replace(/[^a-z0-9\s-]/g, "")
-        .trim()
-        .replace(/\s+/g, "-")
-        .replace(/\-+/g, "-");
+      newsSlug = generateSlug(title);
     }
 
     if (newsSlug && newsSlug !== newsItem.news_slug) {
-      const [slugExists] = await db.query(
-        "SELECT news_id FROM news WHERE news_slug = ? AND news_id != ?",
+      const { rows: slugRows } = await db.query(
+        "SELECT news_id FROM news WHERE news_slug = $1 AND news_id != $2 LIMIT 1",
         [newsSlug, id]
       );
-      if (slugExists.length > 0) {
-        newsSlug = `${newsSlug}-${Date.now().toString().slice(-4)}`;
-      }
-    }
 
-    // Tags xử lý
-    let tagString = newsItem.tags;
-    if (tags !== undefined) {
-      if (tags === null) tagString = null;
-      else if (Array.isArray(tags)) tagString = JSON.stringify(tags);
-      else if (typeof tags === "string") {
-        try {
-          JSON.parse(tags);
-          tagString = tags;
-        } catch {
-          tagString = JSON.stringify(tags.split(",").map((tag) => tag.trim()));
-        }
+      if (slugRows.length > 0) {
+        newsSlug = `${newsSlug}-${Date.now().toString().slice(-4)}`;
       }
     }
 
@@ -643,178 +613,156 @@ router.put("/:slug", verifyToken, async (req, res) => {
     const values = [];
 
     if (title !== undefined) {
-      updates.push("news_title = ?");
       values.push(title);
+      updates.push(`news_title = $${values.length}`);
     }
+
     if (newsSlug !== undefined) {
-      updates.push("news_slug = ?");
       values.push(newsSlug);
+      updates.push(`news_slug = $${values.length}`);
     }
+
     if (content !== undefined) {
-      updates.push("news_content = ?");
       values.push(content);
+      updates.push(`news_content = $${values.length}`);
     }
+
     if (category_id !== undefined) {
-      updates.push("news_category_id = ?");
-      values.push(category_id || null);
+      const parsedCategoryId =
+        category_id === null || category_id === ""
+          ? null
+          : Number.parseInt(category_id, 10);
+
+      if (parsedCategoryId !== null && !Number.isInteger(parsedCategoryId)) {
+        return res.status(400).json({ error: "Invalid category ID" });
+      }
+
+      values.push(parsedCategoryId);
+      updates.push(`news_category_id = $${values.length}`);
     }
-    if (tags !== undefined) {
-      updates.push("tags = ?");
-      values.push(tagString);
-    }
+
     if (status !== undefined) {
-      updates.push("news_status = ?");
-      values.push(status);
-    }
-    if (meta_title !== undefined) {
-      updates.push("meta_title = ?");
-      values.push(meta_title || null);
-    }
-    if (meta_description !== undefined) {
-      updates.push("meta_description = ?");
-      values.push(meta_description || null);
-    }
+      const parsedStatus =
+        status === null || status === ""
+          ? null
+          : Number.parseInt(status, 10);
 
-    // Xử lý ảnh
-    const newImages = Array.isArray(images)
-      ? images.filter(Boolean).slice(0, 5)
-      : [];
+      if (parsedStatus !== null && !Number.isInteger(parsedStatus)) {
+        return res.status(400).json({ error: "Invalid status value" });
+      }
 
-    if (newImages.length > 0) {
-      updates.push("news_image = ?");
-      values.push(JSON.stringify(newImages));
+      values.push(parsedStatus);
+      updates.push(`news_status = $${values.length}`);
     }
 
-    values.push(id);
+    if (images !== undefined) {
+      const normalizedImages = normalizeNewsImages(images);
+      values.push(normalizedImages);
+      updates.push(`news_image = $${values.length}`);
+    }
 
-    if (updates.length === 0) {
+    updates.push("updated_at = NOW()");
+
+    if (updates.length === 1) {
       return res.status(400).json({ error: "No update data provided" });
     }
 
+    values.push(id);
     await db.query(
-      `UPDATE news SET ${updates.join(", ")} WHERE news_id = ?`,
+      `UPDATE news SET ${updates.join(", ")} WHERE news_id = $${values.length}`,
       values
     );
 
-    // Lấy lại bản ghi đã cập nhật
-    const [updatedNews] = await db.query(
+    const { rows: updatedRows } = await db.query(
       `
-      SELECT 
-        n.*, 
+      SELECT
+        n.*,
         u.user_name AS author_name,
         c.news_category_name AS category_name
       FROM news n
-      LEFT JOIN user u ON n.news_author = u.user_id
+      LEFT JOIN "user" u
+        ON n.news_author ~ '^[0-9]+$'
+       AND n.news_author::int = u.user_id
       LEFT JOIN news_category c ON n.news_category_id = c.news_category_id
-      WHERE n.news_id = ?
-    `,
+      WHERE n.news_id = $1
+      `,
       [id]
     );
 
-    const updatedNewsItem = updatedNews[0];
+    const updatedNewsItem = updatedRows[0];
 
-    // Parse ảnh (news_image) và tags
     if (
+      updatedNewsItem &&
       updatedNewsItem.news_image &&
       typeof updatedNewsItem.news_image === "string"
     ) {
       try {
         updatedNewsItem.images = JSON.parse(updatedNewsItem.news_image);
-      } catch {
+      } catch (parseError) {
         updatedNewsItem.images = [];
       }
     }
 
-    if (updatedNewsItem.tags && typeof updatedNewsItem.tags === "string") {
-      try {
-        updatedNewsItem.tags = JSON.parse(updatedNewsItem.tags);
-      } catch {
-        updatedNewsItem.tags = [];
-      }
-    }
-
-    res.json({
+    return res.json({
       message: "News article updated successfully",
       news: updatedNewsItem,
     });
   } catch (error) {
-    res.status(500).json({ error: "Failed to update news article" });
+    return res.status(500).json({ error: "Failed to update news article" });
   }
 });
 
 /**
  * @route   DELETE /api/news/:id
- * @desc    Xóa bài viết
+ * @desc    Xoa bai viet
  * @access  Private (Admin only)
  */
-// Hàm lấy ảnh trong nội dung
-function getImageInContent(content) {
-  const imgRegex = /<img[^>]+src=['"]([^'"]+)['"]/g;
-  let matches;
-  const links = [];
-  while ((matches = imgRegex.exec(content)) !== null) {
-    links.push(matches[1]);
-  }
-  return links;
-}
-
 router.delete("/:id", verifyToken, isAdmin, async (req, res) => {
   try {
-    const id = Number(req.params.id);
-    if (isNaN(id)) {
-      return res.status(400).json({ error: "ID tin tức không hợp lệ" });
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({ error: "Invalid news ID" });
     }
 
-    const [existingNews] = await db.query(
-      "SELECT * FROM news WHERE news_id = ?",
+    const { rows: existingRows } = await db.query(
+      "SELECT * FROM news WHERE news_id = $1",
       [id]
     );
 
-    if (existingNews.length === 0) {
-      return res.status(404).json({ error: "Không tìm thấy tin tức" });
+    if (!existingRows.length) {
+      return res.status(404).json({ error: "News not found" });
     }
 
-    const { news_image, news_content } = existingNews[0];
+    const { news_image, news_content } = existingRows[0];
     let imageUrl = news_image;
-    let imagesInContent = getImageInContent(news_content);
+    const imagesInContent = getImageInContent(news_content);
 
     try {
-      const arr = JSON.parse(news_image);
-      if (Array.isArray(arr) && arr.length > 0) {
-        imageUrl = arr[0];
+      const parsed = JSON.parse(news_image);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        imageUrl = parsed[0];
       }
-    } catch (err) {}
-
-    // Hàm lấy publicId Cloudinary
-    const getCloudinaryPublicId = (url) => {
-      if (!url) return null;
-      const match = url.match(/\/upload\/v\d+\/(.+?)\.(jpg|jpeg|png|webp)$/i);
-      return match ? match[1] : null;
-    };
-
-    // Xóa ảnh cover (nếu có)
-    const publicId = getCloudinaryPublicId(imageUrl);
-    if (publicId) {
-      await cloudinary.uploader.destroy(publicId);
-      // console.log("Đã xóa ảnh Cloudinary:", publicId);
+    } catch (error) {
+      // Keep raw image value when it is not JSON.
     }
 
-    // Xóa ảnh trong nội dung
-    if(Array.isArray(imagesInContent)) {
-      for(const url of imagesInContent) {
-        const publicIdInContent = getCloudinaryPublicId(url);
-        if (publicIdInContent) {
-          await cloudinary.uploader.destroy(publicIdInContent);
-          // console.log("Đã xóa ảnh Cloudinary trong nội dung:", publicIdInContent);
-        }
+    const coverImagePublicId = getCloudinaryPublicId(imageUrl);
+    if (coverImagePublicId) {
+      await cloudinary.uploader.destroy(coverImagePublicId);
+    }
+
+    for (const url of imagesInContent) {
+      const contentImagePublicId = getCloudinaryPublicId(url);
+      if (contentImagePublicId) {
+        await cloudinary.uploader.destroy(contentImagePublicId);
       }
     }
 
-    await db.query("DELETE FROM news WHERE news_id = ?", [id]);
+    await db.query("DELETE FROM news WHERE news_id = $1", [id]);
 
-    res.json({ message: "Xóa tin tức thành công" });
+    return res.json({ message: "News deleted successfully" });
   } catch (error) {
-    res.status(500).json({ error: "Lỗi xóa tin tức" });
+    return res.status(500).json({ error: "Failed to delete news" });
   }
 });
 

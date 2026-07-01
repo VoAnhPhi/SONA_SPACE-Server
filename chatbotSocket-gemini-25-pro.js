@@ -18,11 +18,15 @@ module.exports = function attachChatbotSocketGemini25(io) {
 
   async function getSystemPrompt() {
     try {
-      const [rows] = await db.query(
-        "SELECT context_text FROM chatbot_context LIMIT 1"
-      );
+      const { rows } = await db.query(`
+        SELECT content
+        FROM chatbot_context
+        WHERE is_active = 1
+        ORDER BY updated_at DESC, id DESC
+        LIMIT 1
+      `);
       return (
-        rows?.[0]?.context_text ||
+        rows?.[0]?.content ||
         "Bạn là trợ lý AI thân thiện, trả lời ngắn gọn, hữu ích cho khách truy cập website."
       );
     } catch {
@@ -239,3 +243,4 @@ module.exports = function attachChatbotSocketGemini25(io) {
     });
   });
 };
+

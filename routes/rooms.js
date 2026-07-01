@@ -375,7 +375,7 @@ router.get("/:slug/products", async (req, res) => {
           LIMIT 1
         ) AS price_sale,
 
-        COALESCE(json_agg(DISTINCT col.color_hex) FILTER (WHERE col.color_hex IS NOT NULL), '[]') AS color_hex
+        COALESCE(json_agg(DISTINCT col.color_code) FILTER (WHERE col.color_code IS NOT NULL), '[]') AS color_hex
 
       FROM room_product rp
       JOIN product p ON rp.product_id = p.product_id

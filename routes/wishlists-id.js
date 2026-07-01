@@ -1,32 +1,32 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const db = require('../config/database');
+const db = require("../config/database");
 
 /**
  * @route   GET /api/wishlists-id/test
  * @desc    Test route to check if the router is working
  * @access  Public
  */
-router.get('/test', (req, res) => {
-  res.json({ message: 'Wishlists ID router is working!' });
+router.get("/test", (req, res) => {
+  res.json({ message: "Wishlists ID router is working!" });
 });
 
 /**
  * @route   GET /api/wishlists-id/:userId
- * @desc    Lấy danh sách yêu thích (wishlist) của user theo user_id (Public API)
+ * @desc    Lay danh sach wishlist cua user theo user_id (Public API)
  * @access  Public
  */
-router.get('/:userId', async (req, res) => {
+router.get("/:userId", async (req, res) => {
   try {
-    const userId = req.params.userId;
-    
-    if (!userId) {
-      return res.status(400).json({ error: 'Missing user ID' });
+    const userId = Number.parseInt(req.params.userId, 10);
+
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(400).json({ error: "Invalid user ID" });
     }
 
-    // Lấy danh sách yêu thích của user
-    const [wishlists] = await db.query(`
-      SELECT 
+    const { rows: wishlists } = await db.query(
+      `
+      SELECT
         wl.wishlist_id,
         wl.status,
         wl.created_at,
@@ -41,29 +41,31 @@ router.get('/:userId', async (req, res) => {
         u.user_gmail,
         u.user_address
       FROM wishlist wl
-      JOIN user u ON wl.user_id = u.user_id
+      JOIN "user" u ON wl.user_id = u.user_id
       JOIN variant_product vp ON wl.variant_id = vp.variant_id
       JOIN product p ON vp.product_id = p.product_id
-      WHERE wl.user_id = ? AND wl.deleted_at IS NULL
+      WHERE wl.user_id = $1 AND wl.deleted_at IS NULL
       ORDER BY wl.created_at DESC
-    `, [userId]);
+      `,
+      [userId]
+    );
 
     if (wishlists.length === 0) {
-      return res.json({ 
-        message: 'No wishlist items found for this user',
-        wishlists: []
+      return res.json({
+        message: "No wishlist items found for this user",
+        wishlists: [],
       });
     }
 
-    res.json({
+    return res.json({
       user_id: userId,
       wishlist_count: wishlists.length,
-      wishlists: wishlists
+      wishlists,
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Failed to fetch wishlists',
-      details: error.message
+    return res.status(500).json({
+      error: "Failed to fetch wishlists",
+      details: error.message,
     });
   }
 });

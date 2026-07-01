@@ -103,8 +103,8 @@ router.get("/admin", verifyToken, isAdmin, async (req, res) => {
         u.user_disabled_at,
         u.created_at,
         u.updated_at,
-        COUNT(CASE WHEN o.current_status = 'SUCCESS' THEN 1 END) AS total_success_orders,
-        COUNT(CASE WHEN o.current_status = 'CANCELLED' THEN 1 END) AS total_cancelled_orders
+        COUNT(CASE WHEN o.order_status = 4 THEN 1 END) AS total_success_orders,
+        COUNT(CASE WHEN o.order_status = -1 THEN 1 END) AS total_cancelled_orders
       FROM "user" u
       LEFT JOIN orders o ON u.user_id = o.user_id
       WHERE u.deleted_at IS NULL
@@ -238,8 +238,8 @@ router.get("/admin/:id", async (req, res) => {
         u.user_id, u.user_name, u.user_gmail, u.user_number, u.user_image, u.user_address,
         u.user_role, u.user_gender, u.user_birth, u.user_email_active, u.user_verified_at, u.user_disabled_at,
         u.created_at, u.updated_at,
-        COUNT(CASE WHEN o.current_status = 'SUCCESS' THEN 1 END) AS total_success_orders,
-        COUNT(CASE WHEN o.current_status = 'CANCELLED' THEN 1 END) AS total_cancelled_orders
+        COUNT(CASE WHEN o.order_status = 4 THEN 1 END) AS total_success_orders,
+        COUNT(CASE WHEN o.order_status = -1 THEN 1 END) AS total_cancelled_orders
       FROM "user" u
       LEFT JOIN orders o ON u.user_id = o.user_id
       WHERE u.user_id = $1 AND u.deleted_at IS NULL
@@ -298,7 +298,7 @@ router.get("/admin/:id", async (req, res) => {
 //         return res.status(400).json({ error: "ID không hợp lệ" });
 //       }
 
-//       const [existingUsers] = await db.query(
+//       const { rows: existingUsers } = await db.query(
 //         "SELECT user_role, user_image, user_name, user_number, user_gender, user_birth, user_address, user_email_active, user_verified_at, user_disabled_at FROM user WHERE user_id = ?",
 //         [userId]
 //       );
@@ -378,7 +378,7 @@ router.get("/admin/:id", async (req, res) => {
 //         imageUrl = existingUser.user_image || null;
 //       }
 
-//       const [updateResult] = await db.query(
+//       const { rowCount } = await db.query(
 //         `UPDATE user SET
 //          user_name = ?,
 //          user_number = ?,
@@ -413,7 +413,7 @@ router.get("/admin/:id", async (req, res) => {
 //         ]
 //       );
 
-//       if (updateResult.affectedRows === 0) {
+//       if (rowCount === 0) {
 //         return res.status(404).json({
 //           error:
 //             "Không tìm thấy người dùng hoặc không có thay đổi nào được thực hiện.",
@@ -822,11 +822,18 @@ router.get("/:id/orders", async (req, res) => {
     // Lấy danh sách đơn hàng
     const { rows: orders } = await db.query(
       `
-      SELECT 
+      SELECT
         o.*,
-        os.order_status_name as status_name
+        CASE o.order_status
+          WHEN -1 THEN 'cancelled'
+          WHEN 0 THEN 'pending'
+          WHEN 1 THEN 'confirmed'
+          WHEN 2 THEN 'shipping'
+          WHEN 3 THEN 'delivered'
+          WHEN 4 THEN 'completed'
+          ELSE 'unknown'
+        END AS status_name
       FROM orders o
-      LEFT JOIN order_status os ON o.order_status_id = os.order_status_id
       WHERE o.user_id = $1
       ORDER BY o.created_at DESC
     `,
@@ -838,9 +845,11 @@ router.get("/:id/orders", async (req, res) => {
       // Lấy thông tin thanh toán
       const { rows: payments } = await db.query(
         `
-        SELECT * FROM payment WHERE order_id = $1
+        SELECT *
+        FROM payments
+        WHERE payment_id = $1
       `,
-        [orders[i].order_id]
+        [orders[i].payment_id]
       );
 
       if (payments.length > 0) {
@@ -852,10 +861,16 @@ router.get("/:id/orders", async (req, res) => {
         `
         SELECT 
           oi.*,
+          vp.variant_product_price,
+          vp.variant_product_price_sale,
+          vp.variant_product_slug,
+          vp.variant_product_list_image,
+          p.product_id,
           p.product_name,
           p.product_image
         FROM order_items oi
-        LEFT JOIN product p ON oi.product_id = p.product_id
+        LEFT JOIN variant_product vp ON oi.variant_id = vp.variant_id
+        LEFT JOIN product p ON vp.product_id = p.product_id
         WHERE oi.order_id = $1
       `,
         [orders[i].order_id]
@@ -898,11 +913,30 @@ router.get("/:id/wishlist", async (req, res) => {
         w.wishlist_id,
         w.created_at,
         w.updated_at,
+        vp.variant_id,
+        vp.variant_product_quantity,
+        vp.variant_product_price,
+        vp.variant_product_price_sale,
+        vp.variant_product_slug,
+        vp.variant_product_list_image,
         p.*,
-        (SELECT COUNT(*) FROM comment WHERE product_id = p.product_id) as comment_count,
-        (SELECT AVG(comment_rating) FROM comment WHERE product_id = p.product_id) as average_rating
+        (
+          SELECT COUNT(*)
+          FROM comment c
+          JOIN order_items oi ON c.order_item_id = oi.order_item_id
+          JOIN variant_product cvp ON oi.variant_id = cvp.variant_id
+          WHERE cvp.product_id = p.product_id
+        ) AS comment_count,
+        (
+          SELECT AVG(c.comment_rating)
+          FROM comment c
+          JOIN order_items oi ON c.order_item_id = oi.order_item_id
+          JOIN variant_product cvp ON oi.variant_id = cvp.variant_id
+          WHERE cvp.product_id = p.product_id
+        ) AS average_rating
       FROM wishlist w
-      JOIN product p ON w.product_id = p.product_id
+      JOIN variant_product vp ON w.variant_id = vp.variant_id
+      JOIN product p ON vp.product_id = p.product_id
       WHERE w.user_id = $1
       ORDER BY w.created_at DESC
     `,
@@ -940,11 +974,15 @@ router.get("/:id/reviews", async (req, res) => {
       `
       SELECT 
         c.*,
+        oi.order_id,
+        oi.variant_id,
         p.product_name,
         p.product_image,
-        p.product_price
+        COALESCE(vp.variant_product_price_sale, vp.variant_product_price) AS product_price
       FROM comment c
-      JOIN product p ON c.product_id = p.product_id
+      JOIN order_items oi ON c.order_item_id = oi.order_item_id
+      JOIN variant_product vp ON oi.variant_id = vp.variant_id
+      JOIN product p ON vp.product_id = p.product_id
       WHERE c.user_id = $1
       ORDER BY c.created_at DESC
     `,
