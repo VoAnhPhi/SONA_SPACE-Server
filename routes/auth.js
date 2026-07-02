@@ -6,15 +6,25 @@ const { generateToken, verifyToken } = require("../middleware/auth");
 const jwt = require("jsonwebtoken");
 const { sendEmail } = require("../services/mailVerify");
 const { OAuth2Client } = require("google-auth-library");
+const crypto = require("crypto");
 
 // Lấy JWT secret từ biến môi trường hoặc sử dụng giá trị mặc định
 const JWT_SECRET = process.env.JWT_SECRET || "furnitown-secret-key";
 const clientId = process.env.GOOGLE_CLIENT_ID || process.env.GG_CLIENT_ID;
 const client = new OAuth2Client(clientId);
 const OTP_TYPE_PASSWORD_RESET = "password_reset";
+const getFrontendBaseUrl = () =>
+	(
+		process.env.SITE_URL ||
+		process.env.FRONTEND_URL ||
+		process.env.CLIENT_URL ||
+		process.env.VITE_APP_URL ||
+		"http://localhost:5173"
+	).replace(/\/+$/, "");
 
 async function verifyGoogleToken(token) {
 	if (!token) throw new Error("Thiếu token Google!");
+	if (!clientId) throw new Error("Missing GOOGLE_CLIENT_ID/GG_CLIENT_ID on server.");
 	try {
 		const ticket = await client.verifyIdToken({
 			idToken: token,
@@ -54,7 +64,7 @@ router.post("/register", async (req, res) => {
 		}
 
 		if (!errors.email) {
-			const { rows: emailCheck } = await db.query('SELECT user_id FROM "user" WHERE user_gmail = $1 LIMIT 1', [emailRaw]);
+			const { rows: emailCheck } = await db.query('SELECT user_id FROM "user" WHERE lower(trim(user_gmail)) = $1 LIMIT 1', [emailRaw]);
 			if (Array.isArray(emailCheck) && emailCheck.length > 0) {
 				errors.email = "Email is already in use.";
 			}
@@ -184,7 +194,7 @@ router.post("/register", async (req, res) => {
 router.get("/verify-email", async (req, res) => {
 	try {
 		const { token } = req.query;
-		const frontendBaseUrl = "http://localhost:5173"; // Đổi sang domain frontend thật khi deploy
+		const frontendBaseUrl = getFrontendBaseUrl();
 
 		if (!token) {
 			return res.redirect(
@@ -257,11 +267,17 @@ router.post("/google-login", async (req, res) => {
 			return res.status(400).json({ success: false, message: "Dữ liệu Google không hợp lệ!" });
 		}
 
-		const { email, name, picture } = payload;
+		if (payload.email_verified === false) {
+			return res.status(400).json({ success: false, message: "Google email is not verified." });
+		}
+
+		const email = String(payload.email).trim().toLowerCase();
+		const name = payload.name || email;
+		const picture = payload.picture || null;
 
 		// *** select ***
 		const { rows: users } = await db.query(
-			'SELECT user_id, user_gmail, user_name, user_image, user_role, created_at, user_address, user_number, user_email_active, user_disabled_at FROM "user" WHERE user_gmail = $1',
+			'SELECT user_id, user_gmail, user_name, user_image, user_role, created_at, user_address, user_number, user_email_active, user_disabled_at FROM "user" WHERE lower(trim(user_gmail)) = $1',
 			[email],
 		);
 
@@ -269,9 +285,10 @@ router.post("/google-login", async (req, res) => {
 
 		if (users.length === 0) {
 			// User chưa có, tạo mới
+			const oauthOnlyPassword = await bcrypt.hash(crypto.randomUUID(), 10);
 			const { rows: newUserRes } = await db.query(
-				'INSERT INTO "user" (user_gmail, user_name, user_image, user_role, user_email_active, user_verified_at, created_at) VALUES ($1, $2, $3, $4, 1, NOW(), NOW()) RETURNING user_id',
-				[email, name, picture, "user"],
+				'INSERT INTO "user" (user_gmail, user_name, user_password, user_image, user_role, user_email_active, user_verified_at, created_at) VALUES ($1, $2, $3, $4, $5, 1, NOW(), NOW()) RETURNING user_id',
+				[email, name, oauthOnlyPassword, picture, "user"],
 			);
 			userId = newUserRes[0].user_id;
 			user = {
