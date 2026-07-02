@@ -2,7 +2,7 @@ require("dotenv").config();
 const jwt = require("jsonwebtoken");
 const db = require("../config/database");
 
-const JWT_SECRET = process.env.JWT_SECRET || "furnitown-secret-key";
+const JWT_SECRET = process.env.JWT_SECRET;
 
 function isApiRequest(req) {
   return (
@@ -38,7 +38,7 @@ exports.verifyToken = async (req, res, next) => {
     }
 
     if (!token) {
-      return unauthorized(req, res, next, "Khong duoc phep - Khong co token");
+      return unauthorized(req, res, next, "Cancelled");
     }
 
     const decoded = jwt.verify(token, JWT_SECRET);
@@ -46,7 +46,7 @@ exports.verifyToken = async (req, res, next) => {
     const tokenRole = decoded.role;
 
     if (!userId) {
-      return unauthorized(req, res, next, "Khong duoc phep - Token khong hop le");
+      return unauthorized(req, res, next, "Cancelled");
     }
 
     const { rows: users } = await db.query(
@@ -59,7 +59,7 @@ exports.verifyToken = async (req, res, next) => {
         req,
         res,
         next,
-        "Khong duoc phep - User khong ton tai"
+        "Cancelled"
       );
     }
 
@@ -75,12 +75,12 @@ exports.verifyToken = async (req, res, next) => {
       error.name === "JsonWebTokenError" ||
       error.name === "TokenExpiredError"
     ) {
-      return unauthorized(req, res, next, "Token khong hop le");
+      return unauthorized(req, res, next, "Can't verify token - Token is invalid");
     }
 
     if (isApiRequest(req)) {
       return res.status(500).json({
-        error: { message: "Token khong hop le", status: 500 },
+        error: { message: "Can't verify token - Token is invalid", status: 500 },
       });
     }
 

@@ -591,8 +591,8 @@ SELECT setval('materials_material_id_seq', (SELECT MAX(material_id) FROM materia
 
 -- Users (Admin and sample test users - passwords should be hashed in production)
 INSERT INTO "user" (user_id, user_name, user_gmail, user_number, user_password, user_image, user_address, user_role, user_gender, user_birth, user_email_active, user_verified_at) VALUES
-(1, 'Admin', 'admin@sonaspace.com', '0901234567', '$2a$10$un8nzDME5sEUrSS.8a.29.DnSCPKErQyqDr.5O7zDMT4iq5etsaSa', NULL, 'Sona Space HQ', 'admin', 'male', '1990-01-01', 1, CURRENT_TIMESTAMP),
-(2, 'Staff User', 'staff@sonaspace.com', '0902345678', '$2a$10$un8nzDME5sEUrSS.8a.29.DnSCPKErQyqDr.5O7zDMT4iq5etsaSa', NULL, 'Sona Space Office', 'staff', 'female', '1992-05-15', 1, CURRENT_TIMESTAMP),
+(1, 'Admin', 'admin@sonaspace.com', '0901234567', '$2a$10$OfstRyqvm1g1OdrnRrEnZ.XML/mX8LEfUa44el//VVwlKs8aJThzm', NULL, 'Sona Space HQ', 'admin', 'male', '1990-01-01', 1, CURRENT_TIMESTAMP),
+(2, 'Staff User', 'staff@sonaspace.com', '0902345678', '$2a$10$OfstRyqvm1g1OdrnRrEnZ.XML/mX8LEfUa44el//VVwlKs8aJThzm', NULL, 'Sona Space Office', 'staff', 'female', '1992-05-15', 1, CURRENT_TIMESTAMP),
 (3, 'Test User', 'user@sonaspace.com', '0903456789', '$2a$10$un8nzDME5sEUrSS.8a.29.DnSCPKErQyqDr.5O7zDMT4iq5etsaSa', NULL, '123 Test Street', 'user', 'other', '1995-08-20', 1, CURRENT_TIMESTAMP);
 SELECT setval('user_user_id_seq', (SELECT MAX(user_id) FROM "user"));
 

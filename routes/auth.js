@@ -479,10 +479,6 @@ router.post("/change-password", verifyToken, async (req, res) => {
 
 		// Nếu bcrypt không thành công, thử so sánh trực tiếp
 		if (!isCurrentPasswordValid) {
-			isCurrentPasswordValid = currentPassword === user.user_password || currentPassword === "admin123" || currentPassword === "123456";
-		}
-
-		if (!isCurrentPasswordValid) {
 			return res.status(401).json({ error: "Current password is incorrect" });
 		}
 
@@ -560,11 +556,6 @@ router.post("/admin-login", async (req, res) => {
 			}
 		} catch (err) {
 			bcryptError = err?.message || String(err);
-		}
-
-		// Fallback for legacy plaintext/backdoor (dev only recommended)
-		if (!isPasswordValid) {
-			isPasswordValid = password === stored || password === "admin123" || password === "123456";
 		}
 
 		if (!isPasswordValid) {
