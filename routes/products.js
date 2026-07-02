@@ -970,12 +970,15 @@ router.get("/full-list-all", async (req, res) => {
         pav.product_id,
         a.attribute_id,
         a.attribute_name,
-        NULL::text AS unit,
-        FALSE AS is_required,
-        CASE
-          WHEN pav.material_id IS NOT NULL THEN 'material_id'
-          ELSE NULL::text
-        END AS value_type,
+        a.unit,
+        COALESCE(a.is_required, FALSE) AS is_required,
+        COALESCE(
+          a.value_type,
+          CASE
+            WHEN pav.material_id IS NOT NULL THEN 'material_id'
+            ELSE NULL::text
+          END
+        ) AS value_type,
         CASE
           WHEN pav.value IS NOT NULL AND pav.value <> '' THEN pav.value
           WHEN m.material_name IS NOT NULL THEN m.material_name
@@ -1289,12 +1292,15 @@ router.get("/ai-catalog", async (req, res) => {
         pav.product_id,
         a.attribute_id,
         a.attribute_name,
-        NULL::text AS unit,
-        FALSE AS is_required,
-        CASE
-          WHEN pav.material_id IS NOT NULL THEN 'material_id'
-          ELSE NULL::text
-        END AS value_type,
+        a.unit,
+        COALESCE(a.is_required, FALSE) AS is_required,
+        COALESCE(
+          a.value_type,
+          CASE
+            WHEN pav.material_id IS NOT NULL THEN 'material_id'
+            ELSE NULL::text
+          END
+        ) AS value_type,
         CASE
           WHEN pav.value IS NOT NULL AND pav.value <> '' THEN pav.value
           WHEN m.material_name IS NOT NULL THEN m.material_name
@@ -1531,9 +1537,11 @@ ORDER BY c.color_id DESC
 
     // 4. Danh sÃ¡ch cÃ¡c mÃ u sáº¯c (nháº¹, khÃ´ng cáº§n áº£nh/giÃ¡)
     const colors = variants.map((v) => ({
+      variant_id: v.variant_id,
       colorId: v.color_id,
       colorName: v.color_name,
       colorHex: v.color_hex,
+      colorPriority: v.color_priority || 0,
       slug: v.slug,
     }));
 
@@ -1549,6 +1557,36 @@ ORDER BY c.color_id DESC
       LIMIT 4
       `,
       [product.category_id, product.product_id]
+    );
+
+    const { rows: productAttributes } = await db.query(
+      `
+      SELECT
+        pav.attribute_id,
+        pav.value,
+        pav.material_id,
+        a.attribute_name,
+        a.unit,
+        COALESCE(a.is_required, FALSE) AS is_required,
+        COALESCE(
+          a.value_type,
+          CASE
+            WHEN pav.material_id IS NOT NULL THEN 'material_id'
+            ELSE NULL::text
+          END
+        ) AS value_type,
+        CASE
+          WHEN pav.value IS NOT NULL AND pav.value <> '' THEN pav.value
+          WHEN m.material_name IS NOT NULL THEN m.material_name
+          ELSE NULL
+        END AS value_display
+      FROM product_attribute_value pav
+      JOIN attributes a ON pav.attribute_id = a.attribute_id
+      LEFT JOIN materials m ON pav.material_id = m.material_id
+      WHERE pav.product_id = $1
+      ORDER BY a.attribute_name ASC
+      `,
+      [product.product_id]
     );
 
     return res.json({
@@ -1585,6 +1623,7 @@ ORDER BY c.color_id DESC
         defaultColorHex: defaultVariant?.color_hex ?? null,
         defaultQuantity: defaultVariant?.quantity ?? null,
         variants: variantsFull,
+        attributes: productAttributes,
       },
       colors,
       related_products: relatedProducts.map((rp) => ({
@@ -2184,7 +2223,7 @@ router.post("/add", markDeprecatedRoute("/api/products/add"), verifyToken, isAdm
     let requiredAttributesFromDB = [];
     if (category_id) {
       const { rows: dbAttrs } = await db.query(
-        `SELECT attribute_id, FALSE AS is_required FROM attributes WHERE category_id = $1`,
+        `SELECT attribute_id, COALESCE(is_required, FALSE) AS is_required FROM attributes WHERE category_id = $1`,
         [category_id]
       );
       requiredAttributesFromDB = dbAttrs;
@@ -2479,7 +2518,12 @@ router.put("/admin/:slug", markDeprecatedRoute("/api/products/admin/:slug"), ver
   } else {
     try {
       const { rows: categoryAttributesMeta } = await db.query(
-        `SELECT attribute_id, attribute_name, NULL::text AS value_type, FALSE AS is_required
+        `SELECT
+             attribute_id,
+             attribute_name,
+             value_type,
+             unit,
+             COALESCE(is_required, FALSE) AS is_required
              FROM attributes
              WHERE category_id = $1`,
         [category_id]
@@ -2696,12 +2740,15 @@ router.put("/admin/:slug", markDeprecatedRoute("/api/products/admin/:slug"), ver
 
     const { rows: productAttributesValues } = await db.query(
       `SELECT pav.attribute_id, pav.value, pav.material_id, a.attribute_name,
-              NULL::text AS unit,
-              FALSE AS is_required,
-              CASE
-                WHEN pav.material_id IS NOT NULL THEN 'material_id'
-                ELSE NULL::text
-              END AS value_type
+              a.unit,
+              COALESCE(a.is_required, FALSE) AS is_required,
+              COALESCE(
+                a.value_type,
+                CASE
+                  WHEN pav.material_id IS NOT NULL THEN 'material_id'
+                  ELSE NULL::text
+                END
+              ) AS value_type
          FROM product_attribute_value pav
          JOIN attributes a ON pav.attribute_id = a.attribute_id
          WHERE pav.product_id = $1`,
@@ -2829,12 +2876,15 @@ router.get("/admin/:slug", markDeprecatedRoute("/api/products/admin/:slug"), ver
           pav.value,
           pav.material_id,
           a.attribute_name,
-          NULL::text AS unit,
-          FALSE AS is_required,
-          CASE
-            WHEN pav.material_id IS NOT NULL THEN 'material_id'
-            ELSE NULL::text
-          END AS value_type
+          a.unit,
+          COALESCE(a.is_required, FALSE) AS is_required,
+          COALESCE(
+            a.value_type,
+            CASE
+              WHEN pav.material_id IS NOT NULL THEN 'material_id'
+              ELSE NULL::text
+            END
+          ) AS value_type
       FROM product_attribute_value pav
       JOIN attributes a ON pav.attribute_id = a.attribute_id
       WHERE pav.product_id = $1

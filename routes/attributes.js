@@ -15,7 +15,6 @@ router.post("/:categoryId", verifyToken, isAdmin, async (req, res) => {
       });
     }
 
-    // The current PostgreSQL schema only persists the base attribute record.
     if (!attribute_name || !value_type) {
       return res.status(400).json({
         success: false,
@@ -25,20 +24,26 @@ router.post("/:categoryId", verifyToken, isAdmin, async (req, res) => {
 
     const { rows } = await db.query(
       `
-      INSERT INTO attributes (category_id, attribute_name, created_at, updated_at)
-      VALUES ($1, $2, NOW(), NOW())
-      RETURNING attribute_id
+      INSERT INTO attributes (category_id, attribute_name, value_type, unit, is_required, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+      RETURNING attribute_id, value_type, unit, is_required
       `,
-      [categoryId, String(attribute_name).trim()]
+      [
+        categoryId,
+        String(attribute_name).trim(),
+        String(value_type).trim(),
+        unit || null,
+        Boolean(is_required),
+      ]
     );
 
     return res.status(201).json({
       success: true,
       message: "Attribute created successfully.",
       attribute_id: rows[0].attribute_id,
-      value_type,
-      unit: unit || null,
-      is_required: Boolean(is_required),
+      value_type: rows[0].value_type,
+      unit: rows[0].unit,
+      is_required: rows[0].is_required,
     });
   } catch (err) {
     return res.status(500).json({
@@ -64,9 +69,9 @@ router.get("/:categoryId/attributes", async (req, res) => {
       SELECT
         attribute_id,
         attribute_name,
-        NULL::text AS value_type,
-        NULL::text AS unit,
-        FALSE AS is_required
+        value_type,
+        unit,
+        COALESCE(is_required, FALSE) AS is_required
       FROM attributes
       WHERE category_id = $1
         AND deleted_at IS NULL

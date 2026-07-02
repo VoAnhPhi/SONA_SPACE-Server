@@ -182,3 +182,37 @@ Evidence:
 |---|---|---|---|---|---|
 | S3-B001 | Cross-module | Global guard still has 472 findings outside completed slices | High | TBD | Open |
 | S3-B002 | Orders | `routes/orders.js` migration hotspot | High | TBD | Closed |
+
+## 9. Production Enhancement Backlog
+
+> Added after the original Sprint 3 migration closeout. These items are not part of the original PostgreSQL migration Definition of Done; they are production-readiness enhancements to review before client production rollout.
+
+### Product Flow Enhancement
+
+- [ ] Audit the current product image sources in the database/API response.
+- [ ] Build a safe migration script to download existing product images and upload them to Cloudinary.
+- [ ] Add a dry-run mode that logs `product_id`, old image URL, target Cloudinary folder, and planned update without modifying data.
+- [ ] Add an apply mode that stores the new Cloudinary `secure_url` and `public_id` for each product image.
+- [ ] Skip images that are already hosted on Cloudinary to avoid duplicate uploads.
+- [ ] Write a backup/mapping file before any database update.
+- [ ] Validate product core fields after image migration: name, slug, price, sale price, stock, category, room, material, dimensions, status, and description.
+- [ ] Validate product detail API payload compatibility for the production client.
+
+### Product Variant Flow
+
+- [ ] Review the variant schema and API payload used by the client.
+- [ ] Validate variant fields: `variant_id`, `product_id`, color, size/dimensions, price override, quantity/stock, image, and status.
+- [ ] Confirm product stock stays consistent with variant stock after create/update/delete operations.
+- [ ] Test product detail pages with multiple variants, missing variants, disabled variants, and out-of-stock variants.
+- [ ] Verify cart/order creation uses the selected variant, not only the parent product.
+
+### Order And MoMo Payment Regression
+
+- [ ] Test complete order creation from the production client flow.
+- [ ] Test order creation with variant products and confirm `order_items` stores the correct variant, price, quantity, and product snapshot.
+- [ ] Test stock deduction after successful order creation.
+- [ ] Test MoMo payment request creation.
+- [ ] Test MoMo redirect/IPN handling and confirm payment/order status updates correctly.
+- [ ] Test failed/cancelled MoMo payment cases and confirm the order does not move to a paid/success state.
+- [ ] Validate order listing/detail APIs after MoMo payment for both customer and admin views.
+- [ ] Record staging or production-like evidence before marking this backlog complete.
