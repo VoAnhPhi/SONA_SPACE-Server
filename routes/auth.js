@@ -5,13 +5,10 @@ const db = require("../config/database");
 const { generateToken, verifyToken } = require("../middleware/auth");
 const jwt = require("jsonwebtoken");
 const { sendEmail } = require("../services/mailVerify");
-const { OAuth2Client } = require("google-auth-library");
-const crypto = require("crypto");
+const { authenticateGoogleUser, GoogleAuthError } = require("../services/googleAuthService");
 
 // Lấy JWT secret từ biến môi trường hoặc sử dụng giá trị mặc định
 const JWT_SECRET = process.env.JWT_SECRET || "furnitown-secret-key";
-const clientId = process.env.GOOGLE_CLIENT_ID || process.env.GG_CLIENT_ID;
-const client = new OAuth2Client(clientId);
 const OTP_TYPE_PASSWORD_RESET = "password_reset";
 const getFrontendBaseUrl = () =>
 	(
@@ -22,24 +19,7 @@ const getFrontendBaseUrl = () =>
 		"http://localhost:5173"
 	).replace(/\/+$/, "");
 
-async function verifyGoogleToken(token) {
-	if (!token) throw new Error("Thiếu token Google!");
-	if (!clientId) throw new Error("Missing GOOGLE_CLIENT_ID/GG_CLIENT_ID on server.");
-	try {
-		const ticket = await client.verifyIdToken({
-			idToken: token,
-			audience: clientId,
-		});
-		const payload = ticket.getPayload();
-
-		return payload;
-	} catch (error) {
-		throw new Error("Token Google không hợp lệ!");
-	}
-}
-
-/**
- * @route   POST /api/auth/register
+/**`r`n * @route   POST /api/auth/register
  * @desc    Đăng ký người dùng mới
  * @access  Public
  */
@@ -192,9 +172,9 @@ router.post("/register", async (req, res) => {
 });
 
 router.get("/verify-email", async (req, res) => {
+	const frontendBaseUrl = getFrontendBaseUrl();
 	try {
 		const { token } = req.query;
-		const frontendBaseUrl = getFrontendBaseUrl();
 
 		if (!token) {
 			return res.redirect(
@@ -260,89 +240,33 @@ router.get("/verify-email", async (req, res) => {
 
 router.post("/google-login", async (req, res) => {
 	try {
-		const googleToken = req.body.token;
-		const payload = await verifyGoogleToken(googleToken);
-
-		if (!payload || !payload.email) {
-			return res.status(400).json({ success: false, message: "Dữ liệu Google không hợp lệ!" });
-		}
-
-		if (payload.email_verified === false) {
-			return res.status(400).json({ success: false, message: "Google email is not verified." });
-		}
-
-		const email = String(payload.email).trim().toLowerCase();
-		const name = payload.name || email;
-		const picture = payload.picture || null;
-
-		// *** select ***
-		const { rows: users } = await db.query(
-			'SELECT user_id, user_gmail, user_name, user_image, user_role, created_at, user_address, user_number, user_email_active, user_disabled_at FROM "user" WHERE lower(trim(user_gmail)) = $1',
-			[email],
-		);
-
-		let user, userId;
-
-		if (users.length === 0) {
-			// User chưa có, tạo mới
-			const oauthOnlyPassword = await bcrypt.hash(crypto.randomUUID(), 10);
-			const { rows: newUserRes } = await db.query(
-				'INSERT INTO "user" (user_gmail, user_name, user_password, user_image, user_role, user_email_active, user_verified_at, created_at) VALUES ($1, $2, $3, $4, $5, 1, NOW(), NOW()) RETURNING user_id',
-				[email, name, oauthOnlyPassword, picture, "user"],
-			);
-			userId = newUserRes[0].user_id;
-			user = {
-				id: userId,
-				email,
-				full_name: name,
-				image: picture,
-				address: null,
-				phone: null,
-				role: "user",
-				created_at: new Date(),
-			};
-		} else {
-			// User đã tồn tại
-			const u = users[0];
-
-			// Kiểm tra xác thực email
-			if (Number(u.user_email_active) !== 1) {
-				return res.status(400).json({
-					success: false,
-					message: "Tài khoản của bạn đã bị chặn khỏi nền tảng này. Vui lòng liên hệ với admin để được hỗ trợ.",
-				});
-			}
-			if (u.user_disabled_at) {
-				return res.status(403).json({
-					success: false,
-					message: "Tài khoản đã bị khóa. Vui lòng liên hệ quản trị viên.",
-				});
-			}
-			userId = u.user_id;
-			user = {
-				id: u.user_id,
-				email: u.user_gmail,
-				full_name: u.user_name,
-				image: u.user_image,
-				address: u.user_address,
-				phone: u.user_number,
-				role: u.user_role,
-				created_at: u.created_at,
-			};
-		}
-
-		// Sinh access token cho user
+		const googleToken = req.body?.token || req.body?.credential;
+		const { userId, user } = await authenticateGoogleUser(googleToken);
 		const accessToken = generateToken(userId);
 
-		res.json({
+		return res.json({
 			success: true,
 			message: "Đăng nhập thành công",
 			token: accessToken,
 			user,
 		});
 	} catch (error) {
-		res.status(500).json({
+		if (error instanceof GoogleAuthError) {
+			return res.status(error.status).json({
+				success: false,
+				code: error.code,
+				error: error.message,
+			});
+		}
+
+		console.error("google-login error:", {
+			message: error.message,
+			name: error.name,
+		});
+
+		return res.status(500).json({
 			success: false,
+			code: "GOOGLE_LOGIN_FAILED",
 			error: "Lỗi máy chủ trong quá trình đăng nhập.",
 		});
 	}
