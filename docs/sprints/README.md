@@ -29,6 +29,7 @@ Truoc khi lam bat ky sprint item nao, doc file chuan:
 | Sprint 15 | Dashboard Debug Chat PostgreSQL Migration | Done / Sprint 16 handoff complete | [sprint-15-dashboard-debug-chat-postgres-migration.md](./sprint-15-dashboard-debug-chat-postgres-migration.md) |
 | Sprint 16 | Regression Validation and Release Readiness | Done / Sprint 17 handoff complete | [sprint-16-regression-validation-release-readiness.md](./sprint-16-regression-validation-release-readiness.md) |
 | Sprint 17 | Route QA/QC Full Coverage | Done / closed locally on 2026-06-26 | [sprint-17-route-qaqc-full-coverage.md](./sprint-17-route-qaqc-full-coverage.md) |
+| Sprint 18 | Product Cloudinary Image Pipeline | In Progress | [sprint-18-product-cloudinary-image-pipeline.md](./sprint-18-product-cloudinary-image-pipeline.md) |
 
 ## Quy uoc cap nhat
 

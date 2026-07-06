@@ -13,7 +13,12 @@
 		"qa:auth-smoke": "node ./scripts/qa-auth-smoke.js",
 		"qa:day2-contract": "node ./scripts/qa-day2-contract.js",
 		"qa:day3-contract": "node ./scripts/qa-day3-contract.js",
-		"qa:day4-contract": "node ./scripts/qa-day4-contract.js"
+		"qa:day4-contract": "node ./scripts/qa-day4-contract.js",
+		"qa:product-upload-contract": "node ./scripts/qa-product-upload-contract.js",
+		"upload:recovered-products": "node ./scripts/upload-recovered-product-images-to-cloudinary.js",
+		"apply:cloudinary-product-images": "node ./scripts/apply-cloudinary-product-image-manifest.js",
+		"upload:all-local-product-images": "node ./scripts/upload-all-local-product-images-to-cloudinary.js",
+		"apply:all-local-product-images": "node ./scripts/apply-local-all-cloudinary-product-images.js"
 	},
 	"dependencies": {
 		"@google/genai": "^1.15.0",

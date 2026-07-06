@@ -12,6 +12,65 @@ function resolveFolder(folder, subfolder) {
   return subfolder ? `${folder}/${subfolder}` : folder;
 }
 
+function sanitizeFolderSegment(value) {
+  if (typeof value !== "string") return "";
+
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-{2,}/g, "-");
+}
+
+function resolveProductImageFolder(body) {
+  const imageType = String(body.imageType || "").trim().toLowerCase();
+  const productSlug = sanitizeFolderSegment(body.productSlug);
+  const variantSlug = sanitizeFolderSegment(body.variantSlug);
+
+  if (!["main", "variant"].includes(imageType)) {
+    return {
+      error: {
+        status: 400,
+        field: "imageType",
+        message: "Loai anh san pham khong hop le",
+        detail: "imageType phai la main hoac variant",
+      },
+    };
+  }
+
+  if (!productSlug) {
+    return {
+      error: {
+        status: 400,
+        field: "productSlug",
+        message: "Thieu slug san pham",
+        detail: "productSlug la bat buoc de tao thu muc Cloudinary",
+      },
+    };
+  }
+
+  if (imageType === "variant" && !variantSlug) {
+    return {
+      error: {
+        status: 400,
+        field: "variantSlug",
+        message: "Thieu slug bien the",
+        detail: "variantSlug la bat buoc khi imageType la variant",
+      },
+    };
+  }
+
+  return {
+    folder:
+      imageType === "main"
+        ? `SonaSpace/Product/${productSlug}/main`
+        : `SonaSpace/Product/${productSlug}/variants/${variantSlug}`,
+  };
+}
+
 async function uploadImage(req, res, defaultFolder, defaultSubfolder) {
   try {
     if (!req.file) {
@@ -83,10 +142,18 @@ router.post(
         });
       }
 
-      const folder = req.body.folder || "SonaSpace/Product";
-      const subfolder = req.body.subfolder || "";
+      const folderResult = resolveProductImageFolder(req.body);
+      if (folderResult.error) {
+        const { status, field, message, detail } = folderResult.error;
+        return res.status(status).json({
+          error: message,
+          field,
+          detail,
+        });
+      }
+
       const result = await cloudinary.uploader.upload(buildBase64Image(req.file), {
-        folder: resolveFolder(folder, subfolder),
+        folder: folderResult.folder,
       });
 
       return res.status(200).json({
@@ -97,7 +164,7 @@ router.post(
     } catch (error) {
       return res.status(500).json({
         error: "Loi khong xac dinh khi upload anh",
-        detail: error.message,
+        detail: "Khong the upload anh san pham",
       });
     }
   }

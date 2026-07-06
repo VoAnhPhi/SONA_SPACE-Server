@@ -702,7 +702,7 @@ router.get("/related/by-room/:productId", optionalAuth, async (req, res) => {
       LEFT JOIN variant_product vp ON p.product_id = vp.product_id
       LEFT JOIN color col ON vp.color_id = col.color_id
       WHERE rp1.product_id = $2 AND rp2.product_id != $3
-      GROUP BY p.product_id
+      GROUP BY p.product_id, cat.category_name
       LIMIT 4
       `,
       [userId, productId, productId]
@@ -725,6 +725,7 @@ router.get("/related/by-room/:productId", optionalAuth, async (req, res) => {
 
     res.json({ related_products: result });
   } catch (err) {
+    console.error("GET /api/products/related/by-room/:productId error:", err.message);
     res.status(500).json({ error: "Lá»—i láº¥y sáº£n pháº©m liÃªn quan theo room" });
   }
 });

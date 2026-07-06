@@ -24,6 +24,7 @@
 - `docs/sprints/sprint-15-dashboard-debug-chat-postgres-migration.md`
 - `docs/sprints/sprint-16-regression-validation-release-readiness.md`
 - `docs/sprints/sprint-17-route-qaqc-full-coverage.md`
+- `docs/sprints/sprint-18-product-cloudinary-image-pipeline.md`
 - `docs/sprints/README.md`
 - `docs/db-contract-postgres.md`
 - `docs/mysql-to-postgres-column-mapping.md`
