@@ -22,7 +22,7 @@ const CATEGORY_COMPAT_SELECT = `
 
 /**
  * @route   GET /filter/categories
- * @desc    Láº¥y danh sÃ¡ch danh má»¥c
+ * @desc    Lấy danh sách danh mục
  * @access  Public
  */
 router.get("/filter/", async (req, res) => {
@@ -50,7 +50,7 @@ router.get("/filter/", async (req, res) => {
 
 /**
  * @route   GET /api/categories
- * @desc    Láº¥y táº¥t cáº£ danh má»¥c sáº£n pháº©m
+ * @desc    Lấy tất cả danh mục sản phẩm
  * @access  Public
  */
 router.get("/", async (req, res) => {
@@ -77,7 +77,7 @@ router.get("/", async (req, res) => {
 
 /**
  * @route   GET /api/categories/:slug
- * @desc    Láº¥y thÃ´ng tin má»™t danh má»¥c theo slug
+ * @desc    Lấy thông tin một danh mục theo slug
  * @access  Public
  */
 router.get("/:slug", async (req, res) => {
@@ -105,7 +105,7 @@ router.get("/:slug", async (req, res) => {
 
 /**
  * @route   GET /api/categories/atts/:categoryId
- * @desc    Láº¥y thuá»™c tÃ­nh danh má»¥c theo ID danh má»¥c
+ * @desc    Lấy thuộc tính danh mục theo ID danh mục
  * @access  Public
  */
 router.get("/atts/:categoryId", async (req, res) => {
@@ -114,7 +114,7 @@ router.get("/atts/:categoryId", async (req, res) => {
     if (!categoryId || isNaN(categoryId)) {
       return res
         .status(400)
-        .json({ success: false, message: "ID danh má»¥c khÃ´ng há»£p lá»‡." });
+        .json({ success: false, message: "ID danh mục không hợp lệ." });
     }
 
     const sql = `
@@ -133,14 +133,14 @@ router.get("/atts/:categoryId", async (req, res) => {
   } catch (err) {
     res.status(500).json({
       success: false,
-      message: "Lá»—i mÃ¡y chá»§ khi láº¥y danh sÃ¡ch thuá»™c tÃ­nh danh má»¥c.",
+      message: "Lỗi máy chủ khi lấy danh sách thuộc tính danh mục.",
     });
   }
 });
 
 /**
  * @route   GET /api/categories/admin/all
- * @desc    Láº¥y táº¥t cáº£ danh má»¥c sáº£n pháº©m
+ * @desc    Lấy tất cả danh mục sản phẩm
  * @access  Private (Admin only)
  */
 router.get("/admin/all", verifyToken, isAdmin, async (req, res) => {
@@ -166,13 +166,13 @@ router.get("/admin/all", verifyToken, isAdmin, async (req, res) => {
 });
 /**
  * @route   GET /api/categories/:categoryId/attributes
- * @desc    Láº¥y thuá»™c tÃ­nh danh má»¥c theo ID danh má»¥c (alternative path)
+ * @desc    Lấy thuộc tính danh mục theo ID danh mục (alternative path)
  * @access  Public
  */
 
 /**
  * @route   POST /api/categories
- * @desc    Táº¡o danh má»¥c má»›i
+ * @desc    Tạo danh mục mới
  * @access  Private (Admin only)
  */
 
@@ -231,7 +231,7 @@ router.post("/", verifyToken, isAdmin, async (req, res) => {
 
 /**
  * @route   PUT /api/categories/:id
- * @desc    Cáº­p nháº­t thÃ´ng tin danh má»¥c
+ * @desc    Cập nhật thông tin danh mục
  * @access  Private (Admin only)
  */
 
@@ -351,7 +351,7 @@ router.put("/:slug", verifyToken, isAdmin, async (req, res) => {
 
 /**
  * @route   DELETE /api/categories/:id
- * @desc    XÃ³a danh má»¥c
+ * @desc    Xóa danh mục
  * @access  Private (Admin only)
  */
 
@@ -413,7 +413,7 @@ router.delete("/:slug", verifyToken, isAdmin, async (req, res) => {
 
 /**
  * @route   GET /api/categories/:id/products
- * @desc    Láº¥y táº¥t cáº£ sáº£n pháº©m thuá»™c má»™t danh má»¥c
+ * @desc    Lấy tất cả sản phẩm thuộc một danh mục
  * @access  Public
  */
 router.get("/:slug/products", async (req, res) => {
@@ -433,7 +433,7 @@ router.get("/:slug/products", async (req, res) => {
     const sort_order =
       req.query.sort_order?.toUpperCase() === "ASC" ? "ASC" : "DESC";
 
-    // Kiá»ƒm tra danh má»¥c
+    // Kiểm tra danh mục
     const { rows: category } = await db.query(
       "SELECT category_id, category_name FROM category WHERE slug = $1",
       [slug]
@@ -445,7 +445,7 @@ router.get("/:slug/products", async (req, res) => {
 
     const categoryId = category[0].category_id;
 
-    // Äáº¿m tá»•ng sáº£n pháº©m
+    // Đếm tổng sản phẩm
     const { rows: countResult } = await db.query(
       "SELECT COUNT(*) as total FROM product WHERE category_id = $1",
       [categoryId]
@@ -454,7 +454,7 @@ router.get("/:slug/products", async (req, res) => {
     const totalProducts = countResult[0].total;
     const totalPages = Math.ceil(totalProducts / limit);
 
-    // Query sáº£n pháº©m
+    // Query sản phẩm
     const { rows: products } = await db.query(
       `
        SELECT
@@ -532,7 +532,7 @@ router.get("/:slug/products", async (req, res) => {
 
 /**
  * @route   GET /api/categories/by-product/:slug
- * @desc    Láº¥y danh sÃ¡ch danh má»¥c theo sáº£n pháº©m
+ * @desc    Lấy danh sách danh mục theo sản phẩm
  * @access  Public
  */
 router.get("/by-product/:slug", async (req, res) => {

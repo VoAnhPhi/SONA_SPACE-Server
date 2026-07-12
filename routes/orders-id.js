@@ -56,6 +56,17 @@ function buildIdPlaceholders(ids) {
   return ids.map((_, index) => `$${index + 1}`).join(", ");
 }
 
+function firstImageUrl(value) {
+  if (Array.isArray(value)) {
+    return value.find((image) => String(image || '').trim()) || '/images/default.jpg';
+  }
+
+  return String(value || '')
+    .split(',')
+    .map((image) => image.trim())
+    .find(Boolean) || '/images/default.jpg';
+}
+
 function formatOrder(order, itemsMap, returnsMap) {
   const statusMeta = getStatusMeta(order.order_status);
   const returnInfo = returnsMap.get(order.order_id) || null;
@@ -239,7 +250,7 @@ router.get("/:userId", async (req, res) => {
         id: item.id,
         name: item.product_name,
         slug: item.product_slug,
-        image: item.image || item.product_image || "/images/default.jpg",
+        image: firstImageUrl(item.image || item.product_image),
         price: Number(item.price),
         quantity: item.quantity,
         color: {
@@ -741,7 +752,7 @@ router.get("/items/:orderId", verifyToken, async (req, res) => {
         id: item.product_id,
         name: item.product_name,
         slug: item.product_slug,
-        image: item.variant_image || item.product_image,
+        image: firstImageUrl(item.variant_image || item.product_image),
         category: item.category,
       },
       color: {

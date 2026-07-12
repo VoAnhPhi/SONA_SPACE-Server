@@ -22,7 +22,7 @@ const parseJsonArray = (value) => {
 
 /**
  * @route   GET /api/products
- * @desc    Láº¥y danh sÃ¡ch sáº£n pháº©m vá»›i phÃ¢n trang, lá»c vÃ  sáº¯p xáº¿p
+ * @desc    Lấy danh sách sản phẩm với phân trang, lọc và sắp xếp
  * @access  Public
  */
 router.get("/all", optionalAuth, async (req, res) => {
@@ -65,7 +65,7 @@ router.get("/all", optionalAuth, async (req, res) => {
     // Loc theo gia
     if (price) {
       switch (price) {
-        case "DÆ°á»›i 10 triá»‡u":
+        case "Dưới 10 triệu":
           whereConditions.push(`
               (SELECT 
                 CASE 
@@ -76,7 +76,7 @@ router.get("/all", optionalAuth, async (req, res) => {
               WHERE vp2.product_id = p.product_id) < 10000000
             `);
           break;
-        case "10 - 30 triá»‡u":
+        case "10 - 30 triệu":
           whereConditions.push(`
               (SELECT 
                 CASE 
@@ -87,7 +87,7 @@ router.get("/all", optionalAuth, async (req, res) => {
               WHERE vp2.product_id = p.product_id) BETWEEN 10000000 AND 30000000
             `);
           break;
-        case "TrÃªn 30 triá»‡u":
+        case "Trên 30 triệu":
           whereConditions.push(`
               (SELECT 
                 CASE 
@@ -110,7 +110,7 @@ router.get("/all", optionalAuth, async (req, res) => {
     let orderBy = "p.created_at DESC";
     if (sort) {
       switch (sort) {
-        case "GiÃ¡ tÄƒng dáº§n":
+        case "Giá tăng dần":
           orderBy = `
               (SELECT 
                 CASE 
@@ -121,7 +121,7 @@ router.get("/all", optionalAuth, async (req, res) => {
               WHERE vp2.product_id = p.product_id) ASC
             `;
           break;
-        case "GiÃ¡ giáº£m dáº§n":
+        case "Giá giảm dần":
           orderBy = `
               (SELECT 
                 CASE 
@@ -132,10 +132,10 @@ router.get("/all", optionalAuth, async (req, res) => {
               WHERE vp2.product_id = p.product_id) DESC
             `;
           break;
-        case "Má»›i nháº¥t":
+        case "Mới nhất":
           orderBy = "p.created_at DESC";
           break;
-        case "Giáº£m giÃ¡":
+        case "Giảm giá":
           orderBy = `
               (SELECT 
                 MAX(
@@ -301,7 +301,7 @@ router.get("/", optionalAuth, async (req, res) => {
 
     if (price) {
       switch (price) {
-        case "DÆ°á»›i 10 triá»‡u":
+        case "Dưới 10 triệu":
           whereConditions.push(`
             (SELECT 
               CASE 
@@ -312,7 +312,7 @@ router.get("/", optionalAuth, async (req, res) => {
             WHERE vp2.product_id = p.product_id) < 10000000
           `);
           break;
-        case "10 - 30 triá»‡u":
+        case "10 - 30 triệu":
           whereConditions.push(`
             (SELECT 
               CASE 
@@ -323,7 +323,7 @@ router.get("/", optionalAuth, async (req, res) => {
             WHERE vp2.product_id = p.product_id) BETWEEN 10000000 AND 30000000
           `);
           break;
-        case "TrÃªn 30 triá»‡u":
+        case "Trên 30 triệu":
           whereConditions.push(`
             (SELECT 
               CASE 
@@ -345,7 +345,7 @@ router.get("/", optionalAuth, async (req, res) => {
     let orderBy = "p.created_at DESC";
     if (sort) {
       switch (sort) {
-        case "GiÃ¡ tÄƒng dáº§n":
+        case "Giá tăng dần":
           orderBy = `
             (SELECT 
               CASE 
@@ -356,7 +356,7 @@ router.get("/", optionalAuth, async (req, res) => {
             WHERE vp2.product_id = p.product_id) ASC
           `;
           break;
-        case "GiÃ¡ giáº£m dáº§n":
+        case "Giá giảm dần":
           orderBy = `
             (SELECT 
               CASE 
@@ -367,10 +367,10 @@ router.get("/", optionalAuth, async (req, res) => {
             WHERE vp2.product_id = p.product_id) DESC
           `;
           break;
-        case "Má»›i nháº¥t":
+        case "Mới nhất":
           orderBy = "p.created_at DESC";
           break;
-        case "Giáº£m giÃ¡":
+        case "Giảm giá":
           orderBy = `
             (SELECT 
               MAX(
@@ -546,7 +546,7 @@ router.get("/search", async (req, res) => {
 
 /**
  * @route   GET /api/products/admin
- * @desc    Láº¥y danh sÃ¡ch sáº£n pháº©m cho quáº£n trá»‹ viÃªn
+ * @desc    Lấy danh sách sản phẩm cho quản trị viên
  * @access  Private (Admin only)
  **/
 router.get("/admin", markDeprecatedRoute("/api/products/admin"), verifyToken, isAdmin, async (req, res) => {
@@ -564,7 +564,7 @@ router.get("/admin", markDeprecatedRoute("/api/products/admin"), verifyToken, is
         p.created_at,
         p.updated_at,
         p.product_slug,
-        -- Láº¥y giÃ¡ gá»‘c cá»§a variant Ä‘áº§u tiÃªn
+        -- Lấy giá gốc của variant đầu tiên
         (
           SELECT vp.variant_product_price
           FROM variant_product vp
@@ -573,7 +573,7 @@ router.get("/admin", markDeprecatedRoute("/api/products/admin"), verifyToken, is
           LIMIT 1
         ) AS price,
 
-        -- Láº¥y giÃ¡ sale cá»§a variant Ä‘áº§u tiÃªn náº¿u cÃ³
+        -- Lấy giá sale của variant đầu tiên nếu có
         (
           SELECT 
             CASE 
@@ -586,14 +586,14 @@ router.get("/admin", markDeprecatedRoute("/api/products/admin"), verifyToken, is
           LIMIT 1
         ) AS price_sale,
 
-        -- Tá»•ng sá»‘ lÆ°á»£ng tá»« táº¥t cáº£ variants
+        -- Tổng số lượng từ tất cả variants
         (
           SELECT SUM(vp.variant_product_quantity)
           FROM variant_product vp
           WHERE vp.product_id = p.product_id
         ) AS total_quantity,
 
-        -- Sá»‘ lÆ°á»£ng Ä‘Ã¡nh giÃ¡
+        -- Số lượng đánh giá
         (
           SELECT COUNT(*) 
           FROM comment cm
@@ -608,11 +608,11 @@ router.get("/admin", markDeprecatedRoute("/api/products/admin"), verifyToken, is
       ORDER BY p.created_at DESC
     `);
 
-    // Xá»­ lÃ½ vÃ  format dá»¯ liá»‡u trÆ°á»›c khi tráº£ vá»
+    // Xử lý và format dữ liệu trước khi trả về
     const formattedProducts = products.map((product) => ({
       ...product,
       price: product.price || 0,
-      price_sale: product.price_sale || null, // Giá»¯ null náº¿u khÃ´ng cÃ³ giÃ¡ sale
+      price_sale: product.price_sale || null, // Giữ null nếu không có giá sale
       total_quantity: product.total_quantity || 0,
       comment_count: product.comment_count || 0,
     }));
@@ -625,7 +625,7 @@ router.get("/admin", markDeprecatedRoute("/api/products/admin"), verifyToken, is
 
 /**
  * @route   GET /api/products/related/by-room/:productId
- * @desc    Láº¥y sáº£n pháº©m liÃªn quan theo room
+ * @desc    Lấy sản phẩm liên quan theo room
  * @access  Public
  */
 router.get("/related/by-room/:productId", optionalAuth, async (req, res) => {
@@ -726,13 +726,13 @@ router.get("/related/by-room/:productId", optionalAuth, async (req, res) => {
     res.json({ related_products: result });
   } catch (err) {
     console.error("GET /api/products/related/by-room/:productId error:", err.message);
-    res.status(500).json({ error: "Lá»—i láº¥y sáº£n pháº©m liÃªn quan theo room" });
+    res.status(500).json({ error: "Lỗi lấy sản phẩm liên quan theo room" });
   }
 });
 
 /**
  * @route   GET /api/products/newest
- * @desc    Láº¥y danh sÃ¡ch sáº£n pháº©m má»›i nháº¥t
+ * @desc    Lấy danh sách sản phẩm mới nhất
  * @access  Public
  */
 router.get("/newest", optionalAuth, async (req, res) => {
@@ -844,7 +844,7 @@ router.get("/newest", optionalAuth, async (req, res) => {
 
 /**
  * @route   GET /api/products/variants
- * @desc    Láº¥y danh sÃ¡ch táº¥t cáº£ variants vá»›i thÃ´ng tin sáº£n pháº©m
+ * @desc    Lấy danh sách tất cả variants với thông tin sản phẩm
  * @access  Public
  */
 router.get("/variants", async (req, res) => {
@@ -867,7 +867,7 @@ router.get("/variants", async (req, res) => {
       `
     );
 
-    // Chuáº©n hÃ³a: láº¥y áº£nh Ä‘áº§u tiÃªn cho má»—i variant
+    // Chuẩn hóa: lấy ảnh đầu tiên cho mỗi variant
     const result = variants.map((v) => ({
       variant_id: v.variant_id,
       product_id: v.product_id,
@@ -900,7 +900,7 @@ const splitImages = (list) =>
 router.get("/full-list-all", async (req, res) => {
   const userId = 0;
   try {
-    // 1) Láº¥y toÃ n bá»™ product Ä‘ang active
+    // 1) Lấy toàn bộ product đang active
     const { rows: products } = await db.query(
       `
       SELECT
@@ -930,7 +930,7 @@ router.get("/full-list-all", async (req, res) => {
     const productIds = products.map((p) => p.product_id);
     const idParams = productIds.length ? productIds : [-1];
 
-    // 2) Batch: variants + color (Ä‘Ã£ sáº¯p theo priority máº·c Ä‘á»‹nh)
+    // 2) Batch: variants + color (đã sắp theo priority mặc định)
     const { rows: variantRows } = await db.query(
       `
       SELECT
@@ -964,7 +964,7 @@ router.get("/full-list-all", async (req, res) => {
       [idParams]
     );
 
-    // 4) Batch: attributes (chá»‰ cÃ¡c attr cÃ³ value cho sáº£n pháº©m)
+    // 4) Batch: attributes (chỉ các attr có value cho sản phẩm)
     const { rows: attrRows } = await db.query(
       `
       SELECT
@@ -1020,7 +1020,7 @@ router.get("/full-list-all", async (req, res) => {
       [idParams]
     );
 
-    // 7) Gom variants theo product vÃ  xÃ¡c Ä‘á»‹nh default_variant_id
+    // 7) Gom variants theo product và xác định default_variant_id
     const variantsByPid = new Map();
     for (const v of variantRows) {
       if (!variantsByPid.has(v.product_id)) variantsByPid.set(v.product_id, []);
@@ -1033,7 +1033,7 @@ router.get("/full-list-all", async (req, res) => {
       defaultVariantByPid.set(pid, list[0]?.variant_id || null);
     }
 
-    // 8) Batch wishlist theo default_variant_id (náº¿u cÃ³ user)
+    // 8) Batch wishlist theo default_variant_id (nếu có user)
     let wishlistSet = new Set();
     if (userId) {
       const defaultVariantIds = Array.from(defaultVariantByPid.values()).filter(
@@ -1053,7 +1053,7 @@ router.get("/full-list-all", async (req, res) => {
       }
     }
 
-    // 9) Build cÃ¡c map phá»¥
+    // 9) Build các map phụ
     const roomsByPid = new Map();
     for (const r of roomRows) {
       if (!roomsByPid.has(r.product_id)) roomsByPid.set(r.product_id, []);
@@ -1086,7 +1086,7 @@ router.get("/full-list-all", async (req, res) => {
       stockAgg.map((r) => [r.product_id, r.total_stock])
     );
 
-    // 10) Káº¿t xuáº¥t toÃ n bá»™ list
+    // 10) Kết xuất toàn bộ list
     const result = products.map((p) => {
       const vListRaw = variantsByPid.get(p.product_id) || [];
       const vList = vListRaw.map((v) => ({
@@ -1103,10 +1103,10 @@ router.get("/full-list-all", async (req, res) => {
         images: splitImages(v.list_image),
       }));
 
-      // default variant = pháº§n tá»­ Ä‘áº§u tiÃªn (Ä‘Ã£ sáº¯p theo priority)
+      // default variant = phần tử đầu tiên (đã sắp theo priority)
       const dv = vList[0] || null;
 
-      // TÃ­nh min_price / min_price_sale / min_actual_price tá»« vList
+      // Tính min_price / min_price_sale / min_actual_price từ vList
       let min_price = null,
         min_price_sale = null,
         min_actual_price = null;
@@ -1178,9 +1178,9 @@ router.get("/full-list-all", async (req, res) => {
   }
 });
 
-// Gá»¢I Ã: táº¡o endpoint má»›i Ä‘á»ƒ phá»¥c vá»¥ AI/FE, tráº£ vá» Ä‘á»§ áº£nh cho tá»«ng variant
+// GỢI Ý: tạo endpoint mới để phục vụ AI/FE, trả về đủ ảnh cho từng variant
 router.get("/ai-catalog", async (req, res) => {
-  // Cho phÃ©p truyá»n ?limit=; máº·c Ä‘á»‹nh 50, tá»‘i Ä‘a 200 (trÃ¡nh quÃ¡ táº£i)
+  // Cho phép truyền ?limit=; mặc định 50, tối đa 200 (tránh quá tải)
   const limit = Math.min(parseInt(req.query.limit) || 50, 200);
 
   try {
@@ -1192,7 +1192,7 @@ router.get("/ai-catalog", async (req, res) => {
         .map((x) => normalize(x))
         .filter(Boolean);
 
-    // ThÃªm transform Cloudinary náº¿u URL lÃ  Cloudinary (táº¡o thumbnail nhanh)
+    // Thêm transform Cloudinary nếu URL là Cloudinary (tạo thumbnail nhanh)
     const addCldTransform = (
       url,
       trans = "c_fill,w_480,h_360,q_auto,f_auto"
@@ -1224,7 +1224,7 @@ router.get("/ai-catalog", async (req, res) => {
         )
         .join("; ");
 
-    // 1) Láº¥y danh sÃ¡ch sáº£n pháº©m Ä‘ang active (chá»‰ field cáº§n thiáº¿t)
+    // 1) Lấy danh sách sản phẩm đang active (chỉ field cần thiết)
     const { rows: products } = await db.query(
       `
       SELECT
@@ -1252,7 +1252,7 @@ router.get("/ai-catalog", async (req, res) => {
 
     const productIds = products.map((p) => p.product_id);
 
-    // 2) Variants + mÃ u + LIST IMAGE (Ä‘Ã£ sáº¯p theo color priority & variant_id)
+    // 2) Variants + màu + LIST IMAGE (đã sắp theo color priority & variant_id)
     const { rows: variantRows } = await db.query(
       `
       SELECT
@@ -1275,7 +1275,7 @@ router.get("/ai-catalog", async (req, res) => {
       [productIds]
     );
 
-    // 3) Rooms theo sáº£n pháº©m
+    // 3) Rooms theo sản phẩm
     const { rows: roomRows } = await db.query(
       `
       SELECT rp.product_id, r.room_id, r.room_name, r.slug
@@ -1286,7 +1286,7 @@ router.get("/ai-catalog", async (req, res) => {
       [productIds]
     );
 
-    // 4) Attributes cÃ³ giÃ¡ trá»‹ (gá»™p text)
+    // 4) Attributes có giá trị (gộp text)
     const { rows: attrRows } = await db.query(
       `
       SELECT
@@ -1318,7 +1318,7 @@ router.get("/ai-catalog", async (req, res) => {
       [productIds]
     );
 
-    // 5) comment_count theo sáº£n pháº©m
+    // 5) comment_count theo sản phẩm
     const { rows: commentAgg } = await db.query(
       `
       SELECT vp.product_id, COUNT(*) AS comment_count
@@ -1331,7 +1331,7 @@ router.get("/ai-catalog", async (req, res) => {
       [productIds]
     );
 
-    // 6) total_stock theo sáº£n pháº©m
+    // 6) total_stock theo sản phẩm
     const { rows: stockAgg } = await db.query(
       `
       SELECT product_id, COALESCE(SUM(variant_product_quantity),0) AS total_stock
@@ -1362,7 +1362,7 @@ router.get("/ai-catalog", async (req, res) => {
     const attrsByPid = new Map();
     for (const a of attrRows) {
       if (!attrsByPid.has(a.product_id)) attrsByPid.set(a.product_id, []);
-      if (a.value_display == null || a.value_display === "") continue; // bá» thuá»™c tÃ­nh rá»—ng
+      if (a.value_display == null || a.value_display === "") continue; // bỏ thuộc tính rỗng
       attrsByPid.get(a.product_id).push(a);
     }
 
@@ -1373,7 +1373,7 @@ router.get("/ai-catalog", async (req, res) => {
       stockAgg.map((r) => [r.product_id, Number(r.total_stock || 0)])
     );
 
-    // --- Xuáº¥t items: Má»–I VARIANT = 1 record, kÃ¨m áº£nh ---
+    // --- Xuất items: MỖI VARIANT = 1 record, kèm ảnh ---
     const items = [];
     for (const p of products) {
       const pid = p.product_id;
@@ -1391,7 +1391,7 @@ router.get("/ai-catalog", async (req, res) => {
         rooms.map((r) => r.room_name).join(", "),
       ]
         .filter(Boolean)
-        .join(" â€” ");
+        .join(" — ");
 
       const total_stock = Number(stockByPid.get(pid) ?? 0);
       const comment_count = Number(commentByPid.get(pid) ?? 0);
@@ -1404,27 +1404,27 @@ router.get("/ai-catalog", async (req, res) => {
         const quantity = Number(v.quantity ?? 0);
         const is_in_stock = quantity > 0;
 
-        // áº¢nh variant (Ä‘áº§y Ä‘á»§) + primary + thumbnail
+        // Ảnh variant (đầy đủ) + primary + thumbnail
         const images = splitImages(v.list_image);
         const primary_image = images[0] || product_main_image || null;
 
         items.push({
-          // KhÃ³a Ä‘á»‹nh danh
+          // Khóa định danh
           doc_id: `product:${pid}:variant:${v.variant_id}`,
           product_id: pid,
           variant_id: v.variant_id,
 
-          // Hiá»ƒn thá»‹ tÃªn & phÃ¢n loáº¡i
+          // Hiển thị tên & phân loại
           name: p.product_name,
           category: p.category_name,
           slug: p.product_slug,
           variant_slug: v.variant_slug,
 
-          // MÃ u sáº¯c
+          // Màu sắc
           color_name: v.color_name,
           color_hex: v.color_hex,
 
-          // GiÃ¡ & tá»“n
+          // Giá & tồn
           price,
           price_sale,
           actual_price,
@@ -1432,8 +1432,8 @@ router.get("/ai-catalog", async (req, res) => {
           quantity,
           total_stock,
           comment_count,
-          primary_image, // áº£nh Ä‘áº¡i diá»‡n (láº¥y táº¥m Ä‘áº§u tiÃªn cá»§a variant, fallback sang áº£nh chÃ­nh sp)
-          // Bá»‘i cáº£nh
+          primary_image, // ảnh đại diện (lấy tấm đầu tiên của variant, fallback sang ảnh chính sp)
+          // Bối cảnh
           rooms,
           attributes: attributes.map((x) => ({
             attribute_id: x.attribute_id,
@@ -1447,7 +1447,7 @@ router.get("/ai-catalog", async (req, res) => {
 
           // Search blob cho embedding / filter
           search_blob: compactText(
-            `${baseBlob} â€” MÃ u: ${v.color_name} ${v.color_hex || ""}`
+            `${baseBlob} — Màu: ${v.color_name} ${v.color_hex || ""}`
           ),
 
           // Timestamps
@@ -1470,10 +1470,10 @@ router.get("/ai-catalog", async (req, res) => {
 
 router.get("/:slug", async (req, res) => {
   const slug = req.params.slug;
-  if (!slug) return res.status(400).json({ message: "Slug khÃ´ng há»£p lá»‡" });
+  if (!slug) return res.status(400).json({ message: "Slug không hợp lệ" });
 
   try {
-    // 1. Láº¥y thÃ´ng tin sáº£n pháº©m chÃ­nh
+    // 1. Lấy thông tin sản phẩm chính
     const { rows: productRows } = await db.query(
       `
       SELECT 
@@ -1490,7 +1490,7 @@ router.get("/:slug", async (req, res) => {
     }
     const product = productRows[0];
 
-    // 2. Láº¥y danh sÃ¡ch táº¥t cáº£ biáº¿n thá»ƒ + mÃ u sáº¯c (Ä‘á»ƒ tÃ¬m biáº¿n thá»ƒ máº·c Ä‘á»‹nh vÃ  danh sÃ¡ch mÃ u)
+    // 2. Lấy danh sách tất cả biến thể + màu sắc (để tìm biến thể mặc định và danh sách màu)
     const { rows: variants } = await db.query(
       `
      SELECT
@@ -1530,13 +1530,13 @@ ORDER BY c.color_id DESC
         : [],
     }));
 
-    // 3. TÃ¬m biáº¿n thá»ƒ máº·c Ä‘á»‹nh (Æ°u tiÃªn color_priority = 1)
+    // 3. Tìm biến thể mặc định (ưu tiên color_priority = 1)
     let defaultVariant = variants.find((v) => v.color_priority === 1);
     if (!defaultVariant && variants.length > 0) {
       defaultVariant = variants[0];
     }
 
-    // 4. Danh sÃ¡ch cÃ¡c mÃ u sáº¯c (nháº¹, khÃ´ng cáº§n áº£nh/giÃ¡)
+    // 4. Danh sách các màu sắc (nhẹ, không cần ảnh/giá)
     const colors = variants.map((v) => ({
       variant_id: v.variant_id,
       colorId: v.color_id,
@@ -1546,7 +1546,7 @@ ORDER BY c.color_id DESC
       slug: v.slug,
     }));
 
-    // 5. Láº¥y sáº£n pháº©m liÃªn quan
+    // 5. Lấy sản phẩm liên quan
     const { rows: relatedProducts } = await db.query(
       `
       SELECT
@@ -1640,7 +1640,7 @@ ORDER BY c.color_id DESC
 
 /**
  * @route   POST /api/products
- * @desc    Táº¡o sáº£n pháº©m má»›i
+ * @desc    Tạo sản phẩm mới
  * @access  Private (Admin only)
  */
 router.post("/", verifyToken, isAdmin, async (req, res) => {
@@ -1659,14 +1659,14 @@ router.post("/", verifyToken, isAdmin, async (req, res) => {
       room_ids,
     } = req.body;
 
-    // Kiá»ƒm tra dá»¯ liá»‡u Ä‘áº§u vÃ o
+    // Kiểm tra dữ liệu đầu vào
     if (!name || !price || !category_id) {
       return res
         .status(400)
         .json({ error: "Name, price and category_id are required" });
     }
 
-    // Táº¡o sáº£n pháº©m má»›i
+    // Tạo sản phẩm mới
     const { rows: createdRows } = await db.query(
       `
       INSERT INTO product (
@@ -1691,7 +1691,7 @@ router.post("/", verifyToken, isAdmin, async (req, res) => {
 
     const productId = createdRows[0]?.product_id;
 
-    // ThÃªm cÃ¡c biáº¿n thá»ƒ náº¿u cÃ³
+    // Thêm các biến thể nếu có
     if (variants && Array.isArray(variants) && variants.length > 0) {
       const variantValues = [];
       const variantPlaceholders = variants
@@ -1722,7 +1722,7 @@ router.post("/", verifyToken, isAdmin, async (req, res) => {
       );
     }
 
-    // ThÃªm liÃªn káº¿t vá»›i cÃ¡c phÃ²ng náº¿u cÃ³
+    // Thêm liên kết với các phòng nếu có
     if (room_ids && Array.isArray(room_ids) && room_ids.length > 0) {
       const roomValues = [];
       const roomPlaceholders = room_ids
@@ -1742,7 +1742,7 @@ router.post("/", verifyToken, isAdmin, async (req, res) => {
       );
     }
 
-    // Láº¥y thÃ´ng tin sáº£n pháº©m vá»«a táº¡o
+    // Lấy thông tin sản phẩm vừa tạo
     const { rows: createdProduct } = await db.query(
       `
       SELECT * FROM product WHERE product_id = $1
@@ -1761,12 +1761,12 @@ router.post("/", verifyToken, isAdmin, async (req, res) => {
 
 /**
  * @route   PUT /api/products/:id
- * @desc    Cáº­p nháº­t thÃ´ng tin sáº£n pháº©m
+ * @desc    Cập nhật thông tin sản phẩm
  * @access  Private (Admin only)
  */
 router.put("/:id", verifyToken, isAdmin, async (req, res) => {
   const id = Number(req.params.id);
-  if (isNaN(id)) return res.status(400).json({ message: "ID pháº£i lÃ  sá»‘" });
+  if (isNaN(id)) return res.status(400).json({ message: "ID phải là số" });
 
   try {
     const {
@@ -1783,7 +1783,7 @@ router.put("/:id", verifyToken, isAdmin, async (req, res) => {
       room_ids,
     } = req.body;
 
-    // Kiá»ƒm tra sáº£n pháº©m tá»“n táº¡i
+    // Kiểm tra sản phẩm tồn tại
     const { rows: existingProduct } = await db.query(
       "SELECT product_id FROM product WHERE product_id = $1",
       [id]
@@ -1793,7 +1793,7 @@ router.put("/:id", verifyToken, isAdmin, async (req, res) => {
       return res.status(404).json({ error: "Product not found" });
     }
 
-    // Cáº­p nháº­t thÃ´ng tin sáº£n pháº©m
+    // Cập nhật thông tin sản phẩm
     await db.query(
       `
       UPDATE product 
@@ -1826,12 +1826,12 @@ router.put("/:id", verifyToken, isAdmin, async (req, res) => {
       ]
     );
 
-    // Cáº­p nháº­t biáº¿n thá»ƒ náº¿u cÃ³
+    // Cập nhật biến thể nếu có
     if (variants && Array.isArray(variants) && variants.length > 0) {
-      // XÃ³a biáº¿n thá»ƒ cÅ©
+      // Xóa biến thể cũ
       await db.query("DELETE FROM variant_product WHERE product_id = $1", [id]);
 
-      // ThÃªm biáº¿n thá»ƒ má»›i
+      // Thêm biến thể mới
       const variantValues = [];
       const variantPlaceholders = variants
         .map((v, idx) => {
@@ -1861,12 +1861,12 @@ router.put("/:id", verifyToken, isAdmin, async (req, res) => {
       );
     }
 
-    // Cáº­p nháº­t liÃªn káº¿t phÃ²ng náº¿u cÃ³
+    // Cập nhật liên kết phòng nếu có
     if (room_ids && Array.isArray(room_ids)) {
-      // XÃ³a liÃªn káº¿t cÅ©
+      // Xóa liên kết cũ
       await db.query("DELETE FROM room_product WHERE product_id = $1", [id]);
 
-      // ThÃªm liÃªn káº¿t má»›i náº¿u cÃ³
+      // Thêm liên kết mới nếu có
       if (room_ids.length > 0) {
         const roomValues = [];
         const roomPlaceholders = room_ids
@@ -1887,7 +1887,7 @@ router.put("/:id", verifyToken, isAdmin, async (req, res) => {
       }
     }
 
-    // Láº¥y thÃ´ng tin sáº£n pháº©m Ä‘Ã£ cáº­p nháº­t
+    // Lấy thông tin sản phẩm đã cập nhật
     const { rows: updatedProduct } = await db.query(
       `
       SELECT * FROM product WHERE product_id = $1
@@ -1906,12 +1906,12 @@ router.put("/:id", verifyToken, isAdmin, async (req, res) => {
 
 /**
  * @route   DELETE /api/products/:id
- * @desc    XÃ³a sáº£n pháº©m
+ * @desc    Xóa sản phẩm
  * @access  Private (Admin only)
  */
 router.delete("/:slug", verifyToken, isAdmin, async (req, res) => {
   const slug = req.params.slug;
-  if (!slug) return res.status(400).json({ message: "Slug khÃ´ng há»£p lá»‡" });
+  if (!slug) return res.status(400).json({ message: "Slug không hợp lệ" });
   function extractPublicIdFromUrl(url) {
     if (!url) return null;
     const match = url.match(/\/upload\/(?:v\d+\/)?(.+?)(?:\.\w{3,4})?(?:\?.*)?$/);
@@ -2022,10 +2022,10 @@ router.delete("/:slug", verifyToken, isAdmin, async (req, res) => {
     if (result.softHidden) {
       return res.json({
         message:
-          "Sáº£n pháº©m Ä‘ang Ä‘Æ°á»£c mua trong Ä‘Æ¡n hÃ ng, khÃ´ng thá»ƒ xoÃ¡. Tráº¡ng thÃ¡i Ä‘Ã£ Ä‘Æ°á»£c chuyá»ƒn sang 'áº©n'.",
+          "Sản phẩm đang được mua trong đơn hàng, không thể xoá. Trạng thái đã được chuyển sang 'ẩn'.",
       });
     }
-    return res.json({ message: "XoÃ¡ sáº£n pháº©m thÃ nh cÃ´ng" });
+    return res.json({ message: "Xoá sản phẩm thành công" });
   } catch (error) {
     return res.status(500).json({ error: "Failed to delete product" });
   }
@@ -2033,7 +2033,7 @@ router.delete("/:slug", verifyToken, isAdmin, async (req, res) => {
 
 /**
  * @route   GET /api/products/featured
- * @desc    Láº¥y danh sÃ¡ch sáº£n pháº©m ná»•i báº­t
+ * @desc    Lấy danh sách sản phẩm nổi bật
  * @access  Public
  */
 router.get("/featured/list", async (req, res) => {
@@ -2069,20 +2069,20 @@ router.get("/featured/list", async (req, res) => {
 
 /**
  * @route   GET /api/products/by-category/:categoryId
- * @desc    Láº¥y sáº£n pháº©m theo danh má»¥c
+ * @desc    Lấy sản phẩm theo danh mục
  * @access  Public
  */
 router.get("/by-category/:categoryId", async (req, res) => {
   const categoryId = Number(req.params.categoryId);
   if (isNaN(categoryId))
-    return res.status(400).json({ message: "Category ID pháº£i lÃ  sá»‘" });
+    return res.status(400).json({ message: "Category ID phải là số" });
 
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || LIMIT_PER_PAGE;
     const offset = (page - 1) * limit;
 
-    // Äáº¿m tá»•ng sá»‘ sáº£n pháº©m trong danh má»¥c
+    // Đếm tổng số sản phẩm trong danh mục
     const { rows: countResult } = await db.query(
       'SELECT COUNT(*) AS "total" FROM product WHERE category_id = $1 AND product_status = 1',
       [categoryId]
@@ -2091,7 +2091,7 @@ router.get("/by-category/:categoryId", async (req, res) => {
     const totalProducts = Number(countResult[0]?.total || 0);
     const totalPages = Math.ceil(totalProducts / limit);
 
-    // Láº¥y sáº£n pháº©m theo danh má»¥c vá»›i phÃ¢n trang
+    // Lấy sản phẩm theo danh mục với phân trang
     const { rows: products } = await db.query(
       `
       SELECT 
@@ -2164,7 +2164,7 @@ router.put("/status/:id", verifyToken, isAdmin, async (req, res) => {
 });
 /**
  * @route   POST /api/products/add
- * @desc    ThÃªm sáº£n pháº©m má»›i (Admin)
+ * @desc    Thêm sản phẩm mới (Admin)
  * @access  Private (Admin only)
  */
 
@@ -2189,35 +2189,35 @@ router.post("/add", markDeprecatedRoute("/api/products/add"), verifyToken, isAdm
     const isNumber = (val) => !isEmpty(val) && !isNaN(Number(val));
 
     if (isEmpty(name)) {
-      errors.push({ field: "name", message: "TÃªn sáº£n pháº©m lÃ  báº¯t buá»™c" });
+      errors.push({ field: "name", message: "Tên sản phẩm là bắt buộc" });
     }
     if (isEmpty(description)) {
       errors.push({
         field: "description",
-        message: "MÃ´ táº£ sáº£n pháº©m lÃ  báº¯t buá»™c",
+        message: "Mô tả sản phẩm là bắt buộc",
       });
     }
     if (isEmpty(slug)) {
-      errors.push({ field: "slug", message: "Slug lÃ  báº¯t buá»™c" });
+      errors.push({ field: "slug", message: "Slug là bắt buộc" });
     }
     if (isEmpty(category_id)) {
-      errors.push({ field: "category_id", message: "Danh má»¥c lÃ  báº¯t buá»™c" });
+      errors.push({ field: "category_id", message: "Danh mục là bắt buộc" });
     }
     if (isEmpty(status)) {
-      errors.push({ field: "status", message: "Vui lÃ²ng chá»n tráº¡ng thÃ¡i" });
+      errors.push({ field: "status", message: "Vui lòng chọn trạng thái" });
     } else if (![0, 1, "0", "1"].includes(status)) {
-      errors.push({ field: "status", message: "Tráº¡ng thÃ¡i khÃ´ng há»£p lá»‡" });
+      errors.push({ field: "status", message: "Trạng thái không hợp lệ" });
     }
     if (isEmpty(main_image)) {
       errors.push({
         field: "main_image",
-        message: "áº¢nh chÃ­nh sáº£n pháº©m lÃ  báº¯t buá»™c",
+        message: "Ảnh chính sản phẩm là bắt buộc",
       });
     }
     if (!Array.isArray(room_ids) || room_ids.length === 0) {
       errors.push({
         field: "room_ids",
-        message: "Vui lÃ²ng chá»n Ã­t nháº¥t má»™t phÃ²ng",
+        message: "Vui lòng chọn ít nhất một phòng",
       });
     }
 
@@ -2233,7 +2233,7 @@ router.post("/add", markDeprecatedRoute("/api/products/add"), verifyToken, isAdm
     if (!Array.isArray(attributes)) {
       errors.push({
         field: "attributes",
-        message: "Dá»¯ liá»‡u thuá»™c tÃ­nh sáº£n pháº©m khÃ´ng há»£p lá»‡.",
+        message: "Dữ liệu thuộc tính sản phẩm không hợp lệ.",
       });
     } else {
       const submittedAttributesMap = new Map();
@@ -2253,7 +2253,7 @@ router.post("/add", markDeprecatedRoute("/api/products/add"), verifyToken, isAdm
         ) {
           errors.push({
             field: `attributes`,
-            message: `Thuá»™c tÃ­nh báº¯t buá»™c (ID: ${requiredAttr.attribute_id}) cÃ²n thiáº¿u hoáº·c chÆ°a cÃ³ giÃ¡ trá»‹.`,
+            message: `Thuộc tính bắt buộc (ID: ${requiredAttr.attribute_id}) còn thiếu hoặc chưa có giá trị.`,
           });
         }
       });
@@ -2262,16 +2262,16 @@ router.post("/add", markDeprecatedRoute("/api/products/add"), verifyToken, isAdm
         if (isEmpty(attr.attribute_id)) {
           errors.push({
             field: `attributes[${i}].attribute_id`,
-            message: `Thuá»™c tÃ­nh ${i + 1}: Thiáº¿u ID thuá»™c tÃ­nh.`,
+            message: `Thuộc tính ${i + 1}: Thiếu ID thuộc tính.`,
           });
         }
 
         if (!isEmpty(attr.value) && !isEmpty(attr.material_id)) {
           errors.push({
             field: `attributes[${i}]`,
-            message: `Thuá»™c tÃ­nh ${
+            message: `Thuộc tính ${
               i + 1
-            }: KhÃ´ng thá»ƒ cÃ³ cáº£ giÃ¡ trá»‹ vÃ  ID cháº¥t liá»‡u.`,
+            }: Không thể có cả giá trị và ID chất liệu.`,
           });
         }
       });
@@ -2280,7 +2280,7 @@ router.post("/add", markDeprecatedRoute("/api/products/add"), verifyToken, isAdm
     if (!Array.isArray(variants) || variants.length === 0) {
       errors.push({
         field: "variants",
-        message: "Pháº£i cÃ³ Ã­t nháº¥t má»™t biáº¿n thá»ƒ sáº£n pháº©m",
+        message: "Phải có ít nhất một biến thể sản phẩm",
       });
     } else {
       variants.forEach((v, i) => {
@@ -2288,38 +2288,38 @@ router.post("/add", markDeprecatedRoute("/api/products/add"), verifyToken, isAdm
         if (isEmpty(v.color_id)) {
           errors.push({
             field: `variants[${i}].color_id`,
-            message: `Biáº¿n thá»ƒ ${idx}: Thiáº¿u mÃ u sáº¯c`,
+            message: `Biến thể ${idx}: Thiếu màu sắc`,
           });
         }
         if (isEmpty(v.variant_slug)) {
           errors.push({
             field: `variants[${i}].variant_slug`,
-            message: `Biáº¿n thá»ƒ ${idx}: Thiáº¿u slug`,
+            message: `Biến thể ${idx}: Thiếu slug`,
           });
         }
         if (!isNumber(v.price)) {
           errors.push({
             field: `variants[${i}].price`,
-            message: `Biáº¿n thá»ƒ ${idx}: GiÃ¡ khÃ´ng há»£p lá»‡`,
+            message: `Biến thể ${idx}: Giá không hợp lệ`,
           });
         }
         if (!isNumber(v.quantity)) {
           errors.push({
             field: `variants[${i}].quantity`,
-            message: `Biáº¿n thá»ƒ ${idx}: Sá»‘ lÆ°á»£ng khÃ´ng há»£p lá»‡`,
+            message: `Biến thể ${idx}: Số lượng không hợp lệ`,
           });
         }
         if (!Array.isArray(v.list_image) || v.list_image.length === 0) {
           errors.push({
             field: `variants[${i}].list_image`,
-            message: `Biáº¿n thá»ƒ ${idx}: Cáº§n Ã­t nháº¥t 1 áº£nh`,
+            message: `Biến thể ${idx}: Cần ít nhất 1 ảnh`,
           });
         } else {
           v.list_image.forEach((img, j) => {
             if (typeof img !== "string" || !img.startsWith("http")) {
               errors.push({
                 field: `variants[${i}].list_image[${j}]`,
-                message: `áº¢nh ${j + 1} cá»§a biáº¿n thá»ƒ ${idx} khÃ´ng há»£p lá»‡`,
+                message: `Ảnh ${j + 1} của biến thể ${idx} không hợp lệ`,
               });
             }
           });
@@ -2328,7 +2328,7 @@ router.post("/add", markDeprecatedRoute("/api/products/add"), verifyToken, isAdm
     }
 
     if (errors.length > 0) {
-      return res.status(400).json({ error: "Dá»¯ liá»‡u khÃ´ng há»£p lá»‡", errors });
+      return res.status(400).json({ error: "Dữ liệu không hợp lệ", errors });
     }
 
     try {
@@ -2427,23 +2427,23 @@ router.post("/add", markDeprecatedRoute("/api/products/add"), verifyToken, isAdm
       });
 
       return res.status(201).json({
-        message: "Táº¡o sáº£n pháº©m thÃ nh cÃ´ng",
+        message: "Tạo sản phẩm thành công",
         product_id: createdProduct.productId,
       });
     } catch (insertErr) {
       return res.status(500).json({
-        error: "Lá»—i server khi táº¡o sáº£n pháº©m",
+        error: "Lỗi server khi tạo sản phẩm",
         details: insertErr.message,
       });
     }
   } catch (err) {
-    return res.status(500).json({ error: "Lá»—i server", details: err.message });
+    return res.status(500).json({ error: "Lỗi server", details: err.message });
   }
 });
 
 /**
  *  @route   PUT /api/products/admin/:slug
- *  @desc    Cáº­p nháº­t sáº£n pháº©m
+ *  @desc    Cập nhật sản phẩm
  *  @access  Private (Admin only)
  */
 
@@ -2467,16 +2467,16 @@ router.put("/admin/:slug", markDeprecatedRoute("/api/products/admin/:slug"), ver
   const isNumber = (val) => !isEmpty(val) && !isNaN(Number(val));
 
   if (isEmpty(name)) {
-    errors.push({ field: "name", message: "TÃªn sáº£n pháº©m lÃ  báº¯t buá»™c" });
+    errors.push({ field: "name", message: "Tên sản phẩm là bắt buộc" });
   }
   if (isEmpty(description)) {
     errors.push({
       field: "description",
-      message: "MÃ´ táº£ sáº£n pháº©m lÃ  báº¯t buá»™c",
+      message: "Mô tả sản phẩm là bắt buộc",
     });
   }
   if (isEmpty(slug)) {
-    errors.push({ field: "slug", message: "Slug lÃ  báº¯t buá»™c" });
+    errors.push({ field: "slug", message: "Slug là bắt buộc" });
   }
 
   if (!isEmpty(slug)) {
@@ -2488,33 +2488,33 @@ router.put("/admin/:slug", markDeprecatedRoute("/api/products/admin/:slug"), ver
       if (existingSlug.length > 0) {
         errors.push({
           field: "slug",
-          message: "Slug Ä‘Ã£ tá»“n táº¡i. Vui lÃ²ng chá»n slug khÃ¡c.",
+          message: "Slug đã tồn tại. Vui lòng chọn slug khác.",
         });
       }
     } catch (dbErr) {
-      errors.push({ field: "slug", message: "Lá»—i kiá»ƒm tra slug duy nháº¥t." });
+      errors.push({ field: "slug", message: "Lỗi kiểm tra slug duy nhất." });
     }
   }
 
   if (isEmpty(category_id)) {
-    errors.push({ field: "category_id", message: "Danh má»¥c lÃ  báº¯t buá»™c" });
+    errors.push({ field: "category_id", message: "Danh mục là bắt buộc" });
   }
   if (isEmpty(status)) {
-    errors.push({ field: "status", message: "Vui lÃ²ng chá»n tráº¡ng thÃ¡i" });
+    errors.push({ field: "status", message: "Vui lòng chọn trạng thái" });
   } else if (![0, 1, "0", "1"].includes(status)) {
-    errors.push({ field: "status", message: "Tráº¡ng thÃ¡i khÃ´ng há»£p lá»‡" });
+    errors.push({ field: "status", message: "Trạng thái không hợp lệ" });
   }
   if (isEmpty(main_image)) {
     errors.push({
       field: "main_image",
-      message: "áº¢nh chÃ­nh sáº£n pháº©m lÃ  báº¯t buá»™c",
+      message: "Ảnh chính sản phẩm là bắt buộc",
     });
   }
 
   if (!Array.isArray(attributes)) {
     errors.push({
       field: "attributes",
-      message: "Dá»¯ liá»‡u thuá»™c tÃ­nh khÃ´ng há»£p lá»‡.",
+      message: "Dữ liệu thuộc tính không hợp lệ.",
     });
   } else {
     try {
@@ -2544,7 +2544,7 @@ router.put("/admin/:slug", markDeprecatedRoute("/api/products/admin/:slug"), ver
         if (!meta) {
           errors.push({
             field: `attributes[${payloadAttr.attribute_id}]`,
-            message: `Thuá»™c tÃ­nh ID ${payloadAttr.attribute_id} khÃ´ng há»£p lá»‡ cho danh má»¥c nÃ y.`,
+            message: `Thuộc tính ID ${payloadAttr.attribute_id} không hợp lệ cho danh mục này.`,
           });
           continue;
         }
@@ -2554,14 +2554,14 @@ router.put("/admin/:slug", markDeprecatedRoute("/api/products/admin/:slug"), ver
             if (isEmpty(payloadAttr.material_id)) {
               errors.push({
                 field: `attributes[${payloadAttr.attribute_id}].material_id`,
-                message: `Thuá»™c tÃ­nh "${meta.attribute_name}" (cháº¥t liá»‡u) lÃ  báº¯t buá»™c.`,
+                message: `Thuộc tính "${meta.attribute_name}" (chất liệu) là bắt buộc.`,
               });
             }
           } else {
             if (isEmpty(payloadAttr.value)) {
               errors.push({
                 field: `attributes[${payloadAttr.attribute_id}].value`,
-                message: `Thuá»™c tÃ­nh "${meta.attribute_name}" lÃ  báº¯t buá»™c.`,
+                message: `Thuộc tính "${meta.attribute_name}" là bắt buộc.`,
               });
             }
           }
@@ -2574,7 +2574,7 @@ router.put("/admin/:slug", markDeprecatedRoute("/api/products/admin/:slug"), ver
         ) {
           errors.push({
             field: `attributes[${payloadAttr.attribute_id}].value`,
-            message: `GiÃ¡ trá»‹ cho "${meta.attribute_name}" pháº£i lÃ  sá»‘ há»£p lá»‡.`,
+            message: `Giá trị cho "${meta.attribute_name}" phải là số hợp lệ.`,
           });
         }
 
@@ -2589,7 +2589,7 @@ router.put("/admin/:slug", markDeprecatedRoute("/api/products/admin/:slug"), ver
           if (materialExists.length === 0) {
             errors.push({
               field: `attributes[${payloadAttr.attribute_id}].material_id`,
-              message: `Cháº¥t liá»‡u ID ${payloadAttr.material_id} khÃ´ng tá»“n táº¡i.`,
+              message: `Chất liệu ID ${payloadAttr.material_id} không tồn tại.`,
             });
           }
         }
@@ -2599,14 +2599,14 @@ router.put("/admin/:slug", markDeprecatedRoute("/api/products/admin/:slug"), ver
         if (meta.is_required && !payloadAttributeIds.has(meta.attribute_id)) {
           errors.push({
             field: `attributes[${meta.attribute_id}]`,
-            message: `Thuá»™c tÃ­nh "${meta.attribute_name}" lÃ  báº¯t buá»™c nhÆ°ng bá»‹ thiáº¿u.`,
+            message: `Thuộc tính "${meta.attribute_name}" là bắt buộc nhưng bị thiếu.`,
           });
         }
       }
     } catch (attrErr) {
       errors.push({
         field: "attributes",
-        message: "Lá»—i server khi xÃ¡c thá»±c thuá»™c tÃ­nh.",
+        message: "Lỗi server khi xác thực thuộc tính.",
       });
     }
   }
@@ -2614,12 +2614,12 @@ router.put("/admin/:slug", markDeprecatedRoute("/api/products/admin/:slug"), ver
   if (!Array.isArray(room_ids) || room_ids.length === 0) {
     errors.push({
       field: "room_ids",
-      message: "Vui lÃ²ng chá»n Ã­t nháº¥t má»™t phÃ²ng",
+      message: "Vui lòng chọn ít nhất một phòng",
     });
   }
 
   if (errors.length > 0) {
-    return res.status(400).json({ error: "Dá»¯ liá»‡u khÃ´ng há»£p lá»‡", errors });
+    return res.status(400).json({ error: "Dữ liệu không hợp lệ", errors });
   }
 
   if (removedImages.length) {
@@ -2773,16 +2773,16 @@ router.put("/admin/:slug", markDeprecatedRoute("/api/products/admin/:slug"), ver
 
 /*
  * @route   GET /api/products/admin/:slug
- * @desc    Láº¥y thÃ´ng tin chi tiáº¿t sáº£n pháº©m (Admin)
+ * @desc    Lấy thông tin chi tiết sản phẩm (Admin)
  * @access  Private (Admin only)
  */
 
 router.get("/admin/:slug", markDeprecatedRoute("/api/products/admin/:slug"), verifyToken, isAdmin, async (req, res) => {
   const slug = req.params.slug;
-  if (!slug) return res.status(400).json({ message: "Slug khÃ´ng há»£p lá»‡" });
+  if (!slug) return res.status(400).json({ message: "Slug không hợp lệ" });
 
   try {
-    // 1. Láº¥y thÃ´ng tin sáº£n pháº©m chÃ­nh
+    // 1. Lấy thông tin sản phẩm chính
 
     const { rows: productRows } = await db.query(
       `
@@ -2798,12 +2798,12 @@ router.get("/admin/:slug", markDeprecatedRoute("/api/products/admin/:slug"), ver
         p.product_image,
         p.created_at,
         p.updated_at,
-        p.variant_materials,       -- Giá»¯ láº¡i táº¡m thá»i theo cáº¥u trÃºc báº¡n cung cáº¥p
-        p.variant_height,          -- Giá»¯ láº¡i táº¡m thá»i theo cáº¥u trÃºc báº¡n cung cáº¥p
-        p.variant_width,           -- Giá»¯ láº¡i táº¡m thá»i theo cáº¥u trÃºc báº¡n cung cáº¥p
-        p.variant_depth,           -- Giá»¯ láº¡i táº¡m thá»i theo cáº¥u trÃºc báº¡n cung cáº¥p
-        p.variant_seating_height,  -- Giá»¯ láº¡i táº¡m thá»i theo cáº¥u trÃºc báº¡n cung cáº¥p
-        p.variant_maximum_weight_load, -- Giá»¯ láº¡i táº¡m thá»i theo cáº¥u trÃºc báº¡n cung cáº¥p
+        p.variant_materials,       -- Giữ lại tạm thời theo cấu trúc bạn cung cấp
+        p.variant_height,          -- Giữ lại tạm thời theo cấu trúc bạn cung cấp
+        p.variant_width,           -- Giữ lại tạm thời theo cấu trúc bạn cung cấp
+        p.variant_depth,           -- Giữ lại tạm thời theo cấu trúc bạn cung cấp
+        p.variant_seating_height,  -- Giữ lại tạm thời theo cấu trúc bạn cung cấp
+        p.variant_maximum_weight_load, -- Giữ lại tạm thời theo cấu trúc bạn cung cấp
         c.category_name
       FROM product p
       LEFT JOIN category c ON p.category_id = c.category_id
@@ -2818,7 +2818,7 @@ router.get("/admin/:slug", markDeprecatedRoute("/api/products/admin/:slug"), ver
 
     const product = productRows[0];
 
-    // 2. Láº¥y danh sÃ¡ch biáº¿n thá»ƒ + mÃ u sáº¯c
+    // 2. Lấy danh sách biến thể + màu sắc
     const { rows: variants } = await db.query(
       `
       SELECT
@@ -2858,7 +2858,7 @@ router.get("/admin/:slug", markDeprecatedRoute("/api/products/admin/:slug"), ver
         : [],
     }));
 
-    // 3. Láº¥y danh sÃ¡ch phÃ²ng
+    // 3. Lấy danh sách phòng
     const { rows: rooms } = await db.query(
       `
       SELECT rp.room_id, r.room_name
@@ -2869,7 +2869,7 @@ router.get("/admin/:slug", markDeprecatedRoute("/api/products/admin/:slug"), ver
       [product.product_id]
     );
 
-    // 4. Láº¥y cÃ¡c thuá»™c tÃ­nh Ä‘á»™ng tá»« báº£ng product_attribute_value
+    // 4. Lấy các thuộc tính động từ bảng product_attribute_value
     const { rows: productAttributes } = await db.query(
       `
       SELECT

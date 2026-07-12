@@ -10,7 +10,7 @@ const { withTransaction } = require("../db/transaction");
 const axios = require("axios");
 const { sendEmail1 } = require("../services/mailService1");
 const { VNPay, ignoreLogger, dateFormat } = require("vnpay");
-// ÃƒÂp dÃ¡Â»Â¥ng middleware xÃƒÂ¡c thÃ¡Â»Â±c cho tÃ¡ÂºÂ¥t cÃ¡ÂºÂ£ cÃƒÂ¡c route
+// Áp dụng middleware xác thực cho tất cả các route
 // router.use(verifyToken);
 function formatDateVNPay(date) {
   const yyyy = date.getFullYear().toString();
@@ -100,13 +100,13 @@ async function createUserNotification(client, payload) {
 }
 /**
  * @route   GET /api/orders/count
- * @desc    LÃ¡ÂºÂ¥y sÃ¡Â»â€˜ lÃ†Â°Ã¡Â»Â£ng Ã„â€˜Ã†Â¡n hÃƒÂ ng theo trÃ¡ÂºÂ¡ng thÃƒÂ¡i (chÃ¡Â»â€° admin)
+ * @desc    Lấy số lượng đơn hàng theo trạng thái (chỉ admin)
  * @access  Private (Admin)
  */
 
 router.get("/complete/:orderHash", optionalAuth, async (req, res) => {
   const { orderHash } = req.params;
-  console.log(" Truy vÃ¡ÂºÂ¥n Ã„â€˜Ã†Â¡n hÃƒÂ ng:", orderHash);
+  console.log(" Truy vấn đơn hàng:", orderHash);
 
   try {
     const { rows } = await db.query(
@@ -131,7 +131,7 @@ router.get("/complete/:orderHash", optionalAuth, async (req, res) => {
     if (!order) {
       return res
         .status(404)
-        .json({ success: false, message: "KhÃƒÂ´ng tÃƒÂ¬m thÃ¡ÂºÂ¥y Ã„â€˜Ã†Â¡n hÃƒÂ ng" });
+        .json({ success: false, message: "Không tìm thấy đơn hàng" });
     }
 
     return res.status(200).json({
@@ -145,10 +145,10 @@ router.get("/complete/:orderHash", optionalAuth, async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("LÃ¡Â»â€”i lÃ¡ÂºÂ¥y thÃƒÂ´ng tin Ã„â€˜Ã†Â¡n hÃƒÂ ng:", error.message);
+    console.error("Lỗi lấy thông tin đơn hàng:", error.message);
     return res
       .status(500)
-      .json({ success: false, message: "LÃ¡Â»â€”i mÃƒÂ¡y chÃ¡Â»Â§", error: error.message });
+      .json({ success: false, message: "Lỗi máy chủ", error: error.message });
   }
 });
 
@@ -193,10 +193,10 @@ router.get("/hash/:orderHash", optionalAuth, async (req, res) => {
     if (!order) {
       return res
         .status(404)
-        .json({ success: false, message: "KhÃƒÂ´ng tÃƒÂ¬m thÃ¡ÂºÂ¥y Ã„â€˜Ã†Â¡n hÃƒÂ ng" });
+        .json({ success: false, message: "Không tìm thấy đơn hàng" });
     }
 
-    // LÃ¡ÂºÂ¥y thÃƒÂ´ng tin hÃ¡Â»Â§y/trÃ¡ÂºÂ£ Ã„â€˜Ã†Â¡n hÃƒÂ ng tÃ¡Â»Â« bÃ¡ÂºÂ£ng order_returns nÃ¡ÂºÂ¿u Ã„â€˜Ã†Â¡n hÃƒÂ ng cÃƒÂ³ trÃ¡ÂºÂ¡ng thÃƒÂ¡i CANCELLED hoÃ¡ÂºÂ·c RETURN
+    // Lấy thông tin hủy/trả đơn hàng từ bảng order_returns nếu đơn hàng có trạng thái CANCELLED hoặc RETURN
     let returnInfo = null;
     const currentStatus = toLegacyOrderStatus(order.order_status);
     if (currentStatus === "CANCELLED" || currentStatus === "RETURN") {
@@ -265,34 +265,34 @@ router.get("/hash/:orderHash", optionalAuth, async (req, res) => {
     );
 
     const statusStepMap = {
-      // Quy trÃƒÂ¬nh Ã„â€˜Ã¡ÂºÂ·t hÃƒÂ ng thÃƒÂ nh cÃƒÂ´ng
+      // Quy trình đặt hàng thành công
       PENDING: 1,
       APPROVED: 2,
-      CONFIRMED: 2, // TÃ†Â°Ã†Â¡ng Ã„â€˜Ã†Â°Ã†Â¡ng vÃ¡Â»â€ºi APPROVED
+      CONFIRMED: 2, // Tương đương với APPROVED
       SHIPPING: 3,
       COMPLETED: 4,
-      SUCCESS: 4, // TÃ†Â°Ã†Â¡ng Ã„â€˜Ã†Â°Ã†Â¡ng vÃ¡Â»â€ºi COMPLETED
+      SUCCESS: 4, // Tương đương với COMPLETED
 
-      // Quy trÃƒÂ¬nh hÃ¡Â»Â§y Ã„â€˜Ã†Â¡n hÃƒÂ ng (tÃ¡Â»Â« bÃ¡ÂºÂ£ng order_returns)
-      CANCEL_REQUESTED: 1, // KhÃƒÂ¡ch hÃƒÂ ng yÃƒÂªu cÃ¡ÂºÂ§u hÃ¡Â»Â§y
-      CANCEL_PENDING: 2, // Ã„Âang chÃ¡Â»Â xÃ¡Â»Â­ lÃƒÂ½ hÃ¡Â»Â§y
-      CANCEL_CONFIRMED: 3, // XÃƒÂ¡c nhÃ¡ÂºÂ­n hÃ¡Â»Â§y
-      CANCELLED: 4, // Ã„ÂÃƒÂ£ hÃ¡Â»Â§y hoÃƒÂ n tÃ¡ÂºÂ¥t
+      // Quy trình hủy đơn hàng (từ bảng order_returns)
+      CANCEL_REQUESTED: 1, // Khách hàng yêu cầu hủy
+      CANCEL_PENDING: 2, // Đang chờ xử lý hủy
+      CANCEL_CONFIRMED: 3, // Xác nhận hủy
+      CANCELLED: 4, // Đã hủy hoàn tất
 
-      // Quy trÃƒÂ¬nh trÃ¡ÂºÂ£ hÃƒÂ ng
-      RETURN: 4, // Ã„ÂÃƒÂ£ trÃ¡ÂºÂ£ hÃƒÂ ng hoÃƒÂ n tÃ¡ÂºÂ¥t
+      // Quy trình trả hàng
+      RETURN: 4, // Đã trả hàng hoàn tất
 
-      // Quy trÃƒÂ¬nh tÃ¡Â»Â« chÃ¡Â»â€˜i/thÃ¡ÂºÂ¥t bÃ¡ÂºÂ¡i
-      REJECTED: 4, // Ã„ÂÃ†Â¡n hÃƒÂ ng bÃ¡Â»â€¹ tÃ¡Â»Â« chÃ¡Â»â€˜i - trÃ¡ÂºÂ¡ng thÃƒÂ¡i cuÃ¡Â»â€˜i
-      FAILED: 1, // Ã„ÂÃ†Â¡n hÃƒÂ ng thÃ¡ÂºÂ¥t bÃ¡ÂºÂ¡i
+      // Quy trình từ chối/thất bại
+      REJECTED: 4, // Đơn hàng bị từ chối - trạng thái cuối
+      FAILED: 1, // Đơn hàng thất bại
     };
 
-    // XÃƒÂ¡c Ã„â€˜Ã¡Â»â€¹nh loÃ¡ÂºÂ¡i quy trÃƒÂ¬nh vÃƒÂ  step dÃ¡Â»Â±a trÃƒÂªn trÃ¡ÂºÂ¡ng thÃƒÂ¡i
-    let processType = "normal"; // Quy trÃƒÂ¬nh bÃƒÂ¬nh thÃ†Â°Ã¡Â»Âng
+    // Xác định loại quy trình và step dựa trên trạng thái
+    let processType = "normal"; // Quy trình bình thường
     let actualStatus = currentStatus;
     let statusStep = statusStepMap[currentStatus] || 1;
 
-    // KiÃ¡Â»Æ’m tra xem Ã„â€˜Ã†Â¡n hÃƒÂ ng cÃƒÂ³ trong bÃ¡ÂºÂ£ng order_returns khÃƒÂ´ng
+    // Kiểm tra xem đơn hàng có trong bảng order_returns không
     if (
       (currentStatus === "CANCELLED" || currentStatus === "RETURN") &&
       returnInfo
@@ -316,11 +316,22 @@ router.get("/hash/:orderHash", optionalAuth, async (req, res) => {
       return Number(value) || 0;
     };
 
-    // Ã†Â¯u tiÃƒÂªn thÃƒÂ´ng tin mÃ¡Â»â€ºi nÃ¡ÂºÂ¿u cÃƒÂ³, fallback vÃ¡Â»Â thÃƒÂ´ng tin cÃ…Â©
+    const firstImageUrl = (value) => {
+      if (Array.isArray(value)) {
+        return value.find((image) => String(image || '').trim()) || '/images/default.jpg';
+      }
+
+      return String(value || '')
+        .split(',')
+        .map((image) => image.trim())
+        .find(Boolean) || '/images/default.jpg';
+    };
+
+    // Ưu tiên thông tin mới nếu có, fallback về thông tin cũ
     const recipientName =
       order.order_name_new?.trim() ||
       order.order_name_old?.trim() ||
-      "KhÃƒÂ¡ch hÃƒÂ ng";
+      "Khách hàng";
     const recipientEmail =
       order.order_email_new?.trim() || order.order_email_old?.trim() || "";
     const recipientPhone =
@@ -334,7 +345,7 @@ router.get("/hash/:orderHash", optionalAuth, async (req, res) => {
       date: order.created_at,
       status: currentStatus,
       statusStep,
-      processType, // ThÃƒÂªm thÃƒÂ´ng tin loÃ¡ÂºÂ¡i quy trÃƒÂ¬nh
+      processType, // Thêm thông tin loại quy trình
       couponCode: order.coupon_code || "",
       couponValue: order.coupon_value || "",
       recipientName,
@@ -359,7 +370,7 @@ router.get("/hash/:orderHash", optionalAuth, async (req, res) => {
       products: items.map((item) => ({
         id: item.id,
         name: item.product_name,
-        image: item.image || item.product_image || "/images/default.jpg",
+        image: firstImageUrl(item.image || item.product_image),
         price: item.price_sale
           ? cleanPrice(item.price_sale)
           : cleanPrice(item.price),
@@ -378,7 +389,7 @@ router.get("/hash/:orderHash", optionalAuth, async (req, res) => {
       })),
     };
 
-    // ThÃƒÂªm thÃƒÂ´ng tin return nÃ¡ÂºÂ¿u cÃƒÂ³
+    // Thêm thông tin return nếu có
     if (returnInfo) {
       orderData.returnInfo = {
         return_id: returnInfo.return_id,
@@ -396,10 +407,10 @@ router.get("/hash/:orderHash", optionalAuth, async (req, res) => {
       order: orderData,
     });
   } catch (error) {
-    console.error(" LÃ¡Â»â€”i khi truy vÃ¡ÂºÂ¥n Ã„â€˜Ã†Â¡n hÃƒÂ ng:", error.message);
+    console.error(" Lỗi khi truy vấn đơn hàng:", error.message);
     return res
       .status(500)
-      .json({ success: false, message: "LÃ¡Â»â€”i mÃƒÂ¡y chÃ¡Â»Â§", error: error.message });
+      .json({ success: false, message: "Lỗi máy chủ", error: error.message });
   }
 });
 
@@ -420,7 +431,7 @@ router.get("/admin", verifyToken, isAdmin, async (req, res) => {
         p.payment_status as payment_status_from_payment,
         p.payment_transaction_id AS payment_transaction_id,
         COUNT(oi.order_item_id) AS item_count,
-        -- ThÃƒÂªm thÃƒÂ´ng tin return tÃ¡Â»Â« bÃ¡ÂºÂ£ng order_returns
+        -- Thêm thông tin return từ bảng order_returns
         or_latest.return_status,
         or_latest.return_reason,
         or_latest.return_type,
@@ -432,7 +443,7 @@ router.get("/admin", verifyToken, isAdmin, async (req, res) => {
       LEFT JOIN order_items oi ON o.order_id = oi.order_id
       LEFT JOIN payments p ON o.payment_id = p.payment_id
       LEFT JOIN (
-        -- LÃ¡ÂºÂ¥y thÃƒÂ´ng tin return mÃ¡Â»â€ºi nhÃ¡ÂºÂ¥t cho mÃ¡Â»â€”i order
+        -- Lấy thông tin return mới nhất cho mỗi order
         SELECT 
           order_id,
           return_status,
@@ -517,24 +528,24 @@ router.get("/admin", verifyToken, isAdmin, async (req, res) => {
 
 router.get("/count", verifyToken, isAdmin, async (req, res) => {
   try {
-    // LÃ¡ÂºÂ¥y sÃ¡Â»â€˜ lÃ†Â°Ã¡Â»Â£ng Ã„â€˜Ã†Â¡n hÃƒÂ ng theo trÃ¡ÂºÂ¡ng thÃƒÂ¡i
+    // Lấy số lượng đơn hàng theo trạng thái
     const { rows: result } = await db.query(`
       SELECT order_status, COUNT(*)::int as count
       FROM orders
       GROUP BY order_status
     `);
 
-    // LÃ¡ÂºÂ¥y danh sÃƒÂ¡ch cÃƒÂ¡c trÃ¡ÂºÂ¡ng thÃƒÂ¡i cÃƒÂ³ thÃ¡Â»Æ’ cÃƒÂ³
+    // Lấy danh sách các trạng thái có thể có
     const statuses = [
-      { status: "PENDING", code: 0, name: "ChÃ¡Â»Â xÃƒÂ¡c nhÃ¡ÂºÂ­n" },
-      { status: "CONFIRMED", code: 1, name: "Ã„ÂÃƒÂ£ xÃƒÂ¡c nhÃ¡ÂºÂ­n" },
-      { status: "SHIPPING", code: 2, name: "Ã„Âang giao" },
-      { status: "DELIVERED", code: 3, name: "Ã„ÂÃƒÂ£ giao hÃƒÂ ng" },
-      { status: "SUCCESS", code: 4, name: "Giao hÃƒÂ ng thÃƒÂ nh cÃƒÂ´ng" },
-      { status: "CANCELLED", code: -1, name: "Ã„ÂÃƒÂ£ hÃ¡Â»Â§y" },
+      { status: "PENDING", code: 0, name: "Chờ xác nhận" },
+      { status: "CONFIRMED", code: 1, name: "Đã xác nhận" },
+      { status: "SHIPPING", code: 2, name: "Đang giao" },
+      { status: "DELIVERED", code: 3, name: "Đã giao hàng" },
+      { status: "SUCCESS", code: 4, name: "Giao hàng thành công" },
+      { status: "CANCELLED", code: -1, name: "Đã hủy" },
     ];
 
-    // TÃ¡ÂºÂ¡o Ã„â€˜Ã¡Â»â€˜i tÃ†Â°Ã¡Â»Â£ng thÃ¡Â»â€˜ng kÃƒÂª
+    // Tạo đối tượng thống kê
     const statistics = statuses.map((status) => {
       const count = result.find((r) => Number(r.order_status) === status.code);
       return {
@@ -553,12 +564,12 @@ router.get("/count", verifyToken, isAdmin, async (req, res) => {
 
 /**
  * @route   GET /api/orders
- * @desc    LÃ¡ÂºÂ¥y danh sÃƒÂ¡ch tÃ¡ÂºÂ¥t cÃ¡ÂºÂ£ Ã„â€˜Ã†Â¡n hÃƒÂ ng (admin only)
+ * @desc    Lấy danh sách tất cả đơn hàng (admin only)
  * @access  Private (Admin)
  */
 router.get("/", verifyToken, isAdmin, async (req, res) => {
   try {
-    console.log("Ã„Âang truy cÃ¡ÂºÂ­p GET /api/orders");
+    console.log("Đang truy cập GET /api/orders");
     console.log("User info:", req.user);
 
     const page = parseInt(req.query.page) || 1;
@@ -569,12 +580,12 @@ router.get("/", verifyToken, isAdmin, async (req, res) => {
 
     console.log("Query params:", { page, limit, offset, status, search });
 
-    // XÃƒÂ¢y dÃ¡Â»Â±ng Ã„â€˜iÃ¡Â»Âu kiÃ¡Â»â€¡n tÃƒÂ¬m kiÃ¡ÂºÂ¿m
+    // Xây dựng điều kiện tìm kiếm
     let conditions = [];
     let params = [];
     let paramIndex = 1;
 
-    // LÃ¡Â»Âc theo trÃ¡ÂºÂ¡ng thÃƒÂ¡i
+    // Lọc theo trạng thái
     if (status) {
       const normalizedStatus = String(status).toUpperCase();
       const statusCode = ORDER_STATUS_KEY_TO_CODE[normalizedStatus];
@@ -596,7 +607,7 @@ router.get("/", verifyToken, isAdmin, async (req, res) => {
     console.log("Where clause:", whereClause);
     console.log("Params:", params);
 
-    // Ã„ÂÃ¡ÂºÂ¿m tÃ¡Â»â€¢ng sÃ¡Â»â€˜ Ã„â€˜Ã†Â¡n hÃƒÂ ng
+    // Đếm tổng số đơn hàng
     console.log("Executing count query...");
     const countQuery = `
       SELECT COUNT(*) as total 
@@ -613,7 +624,7 @@ router.get("/", verifyToken, isAdmin, async (req, res) => {
       const totalOrders = Number(countResult[0].total || 0);
       const totalPages = Math.ceil(totalOrders / limit);
 
-      // LÃ¡ÂºÂ¥y danh sÃƒÂ¡ch Ã„â€˜Ã†Â¡n hÃƒÂ ng vÃ¡Â»â€ºi phÃƒÂ¢n trang
+      // Lấy danh sách đơn hàng với phân trang
       console.log("Executing orders query...");
       const ordersQuery = `
         SELECT 
@@ -940,7 +951,7 @@ router.post("/payment/momo", async (req, res) => {
         const { rows: adminRows } = await client.query(
           `SELECT user_id
            FROM "user"
-           WHERE LOWER(user_role) = 'admin'
+           WHERE user_role::text = 'admin'
            ORDER BY user_id
            LIMIT 1`
         );
@@ -1072,7 +1083,7 @@ router.get("/redirect/momo", async (req, res) => {
 
   if (parseInt(resultCode) === 0) {
     try {
-      // GÃ¡Â»Â­i request Ã„â€˜Ã¡ÂºÂ¿n endpoint xÃ¡Â»Â­ lÃƒÂ½ thanh toÃƒÂ¡n
+      // Gửi request đến endpoint xử lý thanh toán
       const response = await axios.post(
         `https://fur.timefortea.io.vn/api/orders/payment/momo`,
         req.query, 
@@ -1083,12 +1094,12 @@ router.get("/redirect/momo", async (req, res) => {
         }
       );
 
-      console.log("GÃ¡Â»Â¯i dÃ¡Â»Â¯ liÃ¡Â»â€¡u vÃ¡Â»Â payment/momo thÃƒÂ nh cÃƒÂ´ng", response.data);
+      console.log("Gữi dữ liệu về payment/momo thành công", response.data);
     } catch (err) {
-      console.error("GÃ¡Â»Â­i payment/momo thÃ¡ÂºÂ¥t bÃ¡ÂºÂ¡i", err.response?.data || err.message);
+      console.error("Gửi payment/momo thất bại", err.response?.data || err.message);
     }
 
-    // Redirect sau khi xÃ¡Â»Â­ lÃƒÂ½
+    // Redirect sau khi xử lý
     return res.redirect(
       `${process.env.SITE_URL}/dat-hang-thanh-cong/${orderId}`
     );
@@ -1100,7 +1111,7 @@ router.get("/redirect/momo", async (req, res) => {
 
 /**
  * @route   POST /api/orders
- * @desc    TÃ¡ÂºÂ¡o Ã„â€˜Ã†Â¡n hÃƒÂ ng mÃ¡Â»â€ºi
+ * @desc    Tạo đơn hàng mới
  * @access  Private
  */
 router.post("/", verifyToken, async (req, res) => {
@@ -1304,7 +1315,7 @@ router.post("/", verifyToken, async (req, res) => {
         const { rows: adminRows } = await client.query(
           `SELECT user_id
            FROM "user"
-           WHERE LOWER(user_role) = 'admin'
+           WHERE user_role::text = 'admin'
            ORDER BY user_id
            LIMIT 1`
         );
@@ -1626,7 +1637,7 @@ router.get("/:id", verifyToken, async (req, res) => {
 
 /**
  * @route   PUT /api/orders/:id/status
- * @desc    CÃ¡ÂºÂ­p nhÃ¡ÂºÂ­t trÃ¡ÂºÂ¡ng thÃƒÂ¡i Ã„â€˜Ã†Â¡n hÃƒÂ ng
+ * @desc    Cập nhật trạng thái đơn hàng
  * @access  Private (Admin)
  */
 router.put("/:id/status", verifyToken, isAdmin, async (req, res) => {
@@ -1639,18 +1650,18 @@ router.put("/:id/status", verifyToken, isAdmin, async (req, res) => {
   if (Number.isNaN(orderId)) {
     return res.status(400).json({
       success: false,
-      message: "MÃƒÂ£ Ã„â€˜Ã†Â¡n hÃƒÂ ng khÃƒÂ´ng hÃ¡Â»Â£p lÃ¡Â»â€¡",
+      message: "Mã đơn hàng không hợp lệ",
     });
   }
 
   if (targetStatusCode === undefined) {
     return res
       .status(400)
-      .json({ success: false, message: "TrÃ¡ÂºÂ¡ng thÃƒÂ¡i khÃƒÂ´ng hÃ¡Â»Â£p lÃ¡Â»â€¡" });
+      .json({ success: false, message: "Trạng thái không hợp lệ" });
   }
 
   try {
-    // LÃ¡ÂºÂ¥y trÃ¡ÂºÂ¡ng thÃƒÂ¡i hiÃ¡Â»â€¡n tÃ¡ÂºÂ¡i cÃ¡Â»Â§a Ã„â€˜Ã†Â¡n + user_id + order_hash
+    // Lấy trạng thái hiện tại của đơn + user_id + order_hash
     const { rows: orderRows } = await db.query(
       "SELECT order_status, user_id, order_hash FROM orders WHERE order_id = $1",
       [orderId]
@@ -1660,7 +1671,7 @@ router.put("/:id/status", verifyToken, isAdmin, async (req, res) => {
     if (!order) {
       return res
         .status(404)
-        .json({ success: false, message: "KhÃƒÂ´ng tÃƒÂ¬m thÃ¡ÂºÂ¥y Ã„â€˜Ã†Â¡n hÃƒÂ ng" });
+        .json({ success: false, message: "Không tìm thấy đơn hàng" });
     }
 
     const fromStatusCode = Number(order.order_status);
@@ -1670,17 +1681,17 @@ router.put("/:id/status", verifyToken, isAdmin, async (req, res) => {
     if (fromStatusCode === targetStatusCode) {
       return res.status(200).json({
         success: true,
-        message: "TrÃ¡ÂºÂ¡ng thÃƒÂ¡i khÃƒÂ´ng thay Ã„â€˜Ã¡Â»â€¢i",
+        message: "Trạng thái không thay đổi",
       });
     }
 
-    // CÃ¡ÂºÂ­p nhÃ¡ÂºÂ­t trÃ¡ÂºÂ¡ng thÃƒÂ¡i Ã„â€˜Ã†Â¡n hÃƒÂ ng
+    // Cập nhật trạng thái đơn hàng
     await db.query(
       "UPDATE orders SET order_status = $1, updated_at = NOW() WHERE order_id = $2",
       [targetStatusCode, orderId]
     );
 
-    // Ghi log chuyÃ¡Â»Æ’n trÃ¡ÂºÂ¡ng thÃƒÂ¡i
+    // Ghi log chuyển trạng thái
     await db.query(
       `INSERT INTO order_status_log (
         order_id, old_status, new_status, changed_by, note, created_at
@@ -1690,16 +1701,16 @@ router.put("/:id/status", verifyToken, isAdmin, async (req, res) => {
         fromStatusCode,
         targetStatusCode,
         req.user?.id || null,
-        `ChuyÃ¡Â»Æ’n trÃ¡ÂºÂ¡ng thÃƒÂ¡i tÃ¡Â»Â« ${fromStatus} Ã¢Å¾Â ${toStatus}`,
+        `Chuyển trạng thái từ ${fromStatus} ➝ ${toStatus}`,
       ]
     );
 
-    // GÃ¡Â»Â­i thÃƒÂ´ng bÃƒÂ¡o cho user
+    // Gửi thông báo cho user
     const userId = order.user_id;
     const orderHash = order.order_hash;
 
     if (userId) {
-      // LÃ¡ÂºÂ¥y loÃ¡ÂºÂ¡i thÃƒÂ´ng bÃƒÂ¡o 'order'
+      // Lấy loại thông báo 'order'
       const { rows: typeRows } = await db.query(
         `SELECT id FROM notification_types WHERE type_code = 'order' LIMIT 1`
       );
@@ -1707,21 +1718,21 @@ router.put("/:id/status", verifyToken, isAdmin, async (req, res) => {
       if (typeRows.length > 0) {
         const notificationTypeId = typeRows[0].id;
 
-        // Map trÃ¡ÂºÂ¡ng thÃƒÂ¡i sang tiÃ¡ÂºÂ¿ng ViÃ¡Â»â€¡t
+        // Map trạng thái sang tiếng Việt
         const statusMessageMap = {
-          PENDING: "ChÃ¡Â»Â xÃƒÂ¡c nhÃ¡ÂºÂ­n",
-          CONFIRMED: "Ã„ÂÃƒÂ£ xÃƒÂ¡c nhÃ¡ÂºÂ­n",
-          SHIPPING: "Ã„Âang giao hÃƒÂ ng",
-          SUCCESS: "Giao hÃƒÂ ng thÃƒÂ nh cÃƒÂ´ng",
-          FAILED: "Giao hÃƒÂ ng thÃ¡ÂºÂ¥t bÃ¡ÂºÂ¡i",
-          CANCELLED: "Ã„ÂÃƒÂ£ hÃ¡Â»Â§y Ã„â€˜Ã†Â¡n",
+          PENDING: "Chờ xác nhận",
+          CONFIRMED: "Đã xác nhận",
+          SHIPPING: "Đang giao hàng",
+          SUCCESS: "Giao hàng thành công",
+          FAILED: "Giao hàng thất bại",
+          CANCELLED: "Đã hủy đơn",
         };
 
         const readableStatus = statusMessageMap[toStatus] || toStatus;
-        const notificationTitle = "CÃ¡ÂºÂ­p nhÃ¡ÂºÂ­t trÃ¡ÂºÂ¡ng thÃƒÂ¡i Ã„â€˜Ã†Â¡n hÃƒÂ ng";
-        const notificationMessage = `Ã„ÂÃ†Â¡n hÃƒÂ ng ${orderHash} cÃ¡Â»Â§a bÃ¡ÂºÂ¡n Ã„â€˜ÃƒÂ£ Ã„â€˜Ã†Â°Ã¡Â»Â£c chuyÃ¡Â»Æ’n sang trÃ¡ÂºÂ¡ng thÃƒÂ¡i "${readableStatus}".`;
+        const notificationTitle = "Cập nhật trạng thái đơn hàng";
+        const notificationMessage = `Đơn hàng ${orderHash} của bạn đã được chuyển sang trạng thái "${readableStatus}".`;
         const orderLink = `chi-tiet-don-hang/${orderHash}`;
-        // Ghi vÃƒÂ o bÃ¡ÂºÂ£ng notifications
+        // Ghi vào bảng notifications
         const { rows: notiRows } = await db.query(
           `INSERT INTO notifications (type_id, title, message, link, sender_id)
           VALUES ($1, $2, $3, $4, $5)
@@ -1737,7 +1748,7 @@ router.put("/:id/status", verifyToken, isAdmin, async (req, res) => {
 
         const notificationId = notiRows[0].id;
 
-        // Ghi vÃƒÂ o bÃ¡ÂºÂ£ng user_notifications
+        // Ghi vào bảng user_notifications
         await db.query(
           `INSERT INTO user_notifications (user_id, notification_id, is_read, read_at, is_deleted)
            VALUES ($1, $2, 0, NULL, 0)`,
@@ -1745,28 +1756,28 @@ router.put("/:id/status", verifyToken, isAdmin, async (req, res) => {
         );
       } else {
         console.warn(
-          "LoÃ¡ÂºÂ¡i thÃƒÂ´ng bÃƒÂ¡o 'order' khÃƒÂ´ng tÃ¡Â»â€œn tÃ¡ÂºÂ¡i hoÃ¡ÂºÂ·c Ã„â€˜ÃƒÂ£ bÃ¡Â»â€¹ vÃƒÂ´ hiÃ¡Â»â€¡u hÃƒÂ³a."
+          "Loại thông báo 'order' không tồn tại hoặc đã bị vô hiệu hóa."
         );
       }
     }
 
     return res.status(200).json({
       success: true,
-      message: `Ã„ÂÃƒÂ£ chuyÃ¡Â»Æ’n trÃ¡ÂºÂ¡ng thÃƒÂ¡i Ã„â€˜Ã†Â¡n hÃƒÂ ng sang ${toStatus}`,
+      message: `Đã chuyển trạng thái đơn hàng sang ${toStatus}`,
       new_status: toStatus,
     });
   } catch (err) {
-    console.error("LÃ¡Â»â€”i cÃ¡ÂºÂ­p nhÃ¡ÂºÂ­t trÃ¡ÂºÂ¡ng thÃƒÂ¡i Ã„â€˜Ã†Â¡n hÃƒÂ ng:", err);
+    console.error("Lỗi cập nhật trạng thái đơn hàng:", err);
     res.status(500).json({
       success: false,
-      message: "LÃ¡Â»â€”i mÃƒÂ¡y chÃ¡Â»Â§ khi cÃ¡ÂºÂ­p nhÃ¡ÂºÂ­t trÃ¡ÂºÂ¡ng thÃƒÂ¡i",
+      message: "Lỗi máy chủ khi cập nhật trạng thái",
     });
   }
 });
 
 /**
  * @route   PUT /api/orders/:id/return-status
- * @desc    CÃ¡ÂºÂ­p nhÃ¡ÂºÂ­t trÃ¡ÂºÂ¡ng thÃƒÂ¡i hoÃƒÂ n trÃ¡ÂºÂ£ Ã„â€˜Ã†Â¡n hÃƒÂ ng
+ * @desc    Cập nhật trạng thái hoàn trả đơn hàng
  * @access  Private (Admin)
  */
 router.put("/:id/return-status", verifyToken, isAdmin, async (req, res) => {
@@ -1782,14 +1793,14 @@ router.put("/:id/return-status", verifyToken, isAdmin, async (req, res) => {
   if (Number.isNaN(orderId)) {
     return res.status(400).json({
       success: false,
-      message: "MÃƒÂ£ Ã„â€˜Ã†Â¡n hÃƒÂ ng khÃƒÂ´ng hÃ¡Â»Â£p lÃ¡Â»â€¡",
+      message: "Mã đơn hàng không hợp lệ",
     });
   }
 
   if (normalizedReturnStatus !== "" && statusCode === undefined) {
     return res.status(400).json({
       success: false,
-      message: "TrÃ¡ÂºÂ¡ng thÃƒÂ¡i hoÃƒÂ n trÃ¡ÂºÂ£ khÃƒÂ´ng hÃ¡Â»Â£p lÃ¡Â»â€¡",
+      message: "Trạng thái hoàn trả không hợp lệ",
     });
   }
 
@@ -1806,7 +1817,7 @@ router.put("/:id/return-status", verifyToken, isAdmin, async (req, res) => {
       const order = orderRows[0];
 
       if (!order) {
-        const notFound = new Error("KhÃƒÂ´ng tÃƒÂ¬m thÃ¡ÂºÂ¥y Ã„â€˜Ã†Â¡n hÃƒÂ ng");
+        const notFound = new Error("Không tìm thấy đơn hàng");
         notFound.statusCode = 404;
         throw notFound;
       }
@@ -1849,7 +1860,7 @@ router.put("/:id/return-status", verifyToken, isAdmin, async (req, res) => {
             Number(order.order_status),
             ORDER_STATUS_KEY_TO_CODE.SUCCESS,
             req.user?.id || null,
-            "HÃ¡Â»Â§y yÃƒÂªu cÃ¡ÂºÂ§u hoÃƒÂ n trÃ¡ÂºÂ£",
+            "Hủy yêu cầu hoàn trả",
           ]
         );
 
@@ -1879,8 +1890,8 @@ router.put("/:id/return-status", verifyToken, isAdmin, async (req, res) => {
           [
             orderId,
             order.user_id || req.user?.id || null,
-            "Ã„ÂÃ†Â°Ã¡Â»Â£c tÃ¡ÂºÂ¡o bÃ¡Â»Å¸i admin",
-            "CÃ¡ÂºÂ­p nhÃ¡ÂºÂ­t trÃ¡ÂºÂ¡ng thÃƒÂ¡i hoÃƒÂ n trÃ¡ÂºÂ£ tÃ¡Â»Â« admin",
+            "Được tạo bởi admin",
+            "Cập nhật trạng thái hoàn trả từ admin",
             statusCode,
             0,
           ]
@@ -1895,7 +1906,7 @@ router.put("/:id/return-status", verifyToken, isAdmin, async (req, res) => {
           existingReturn ? Number(existingReturn.return_status) : null,
           statusCode,
           req.user?.id || null,
-          `CÃ¡ÂºÂ­p nhÃ¡ÂºÂ­t trÃ¡ÂºÂ¡ng thÃƒÂ¡i hoÃƒÂ n trÃ¡ÂºÂ£: ${normalizedReturnStatus}`,
+          `Cập nhật trạng thái hoàn trả: ${normalizedReturnStatus}`,
         ]
       );
 
@@ -1928,13 +1939,13 @@ router.put("/:id/return-status", verifyToken, isAdmin, async (req, res) => {
       const userId = customerInfo?.user_id;
 
       if (!userId || !customerEmail) {
-        throw new Error("KhÃƒÂ´ng cÃƒÂ³ Ã„â€˜Ã¡Â»Â§ thÃƒÂ´ng tin khÃƒÂ¡ch hÃƒÂ ng Ã„â€˜Ã¡Â»Æ’ xÃ¡Â»Â­ lÃƒÂ½ tiÃ¡ÂºÂ¿p");
+        throw new Error("Không có đủ thông tin khách hàng để xử lý tiếp");
       }
 
       const emailData = {
-        customerName: customerName || "KhÃƒÂ¡ch hÃƒÂ ng",
+        customerName: customerName || "Khách hàng",
         orderHash: customerInfo.order_hash,
-        reason: customerInfo.return_reason || "YÃƒÂªu cÃ¡ÂºÂ§u trÃ¡ÂºÂ£ hÃƒÂ ng",
+        reason: customerInfo.return_reason || "Yêu cầu trả hàng",
         refundAmount: customerInfo.return_total || 0,
         approvalDate: new Date().toLocaleDateString("vi-VN"),
         supportEmail: "sonaspace.furniture@gmail.com",
@@ -1943,7 +1954,7 @@ router.put("/:id/return-status", verifyToken, isAdmin, async (req, res) => {
 
       await sendEmail1(
         customerEmail,
-        `[Sona Space] Ã„ÂÃƒÂ£ duyÃ¡Â»â€¡t yÃƒÂªu cÃ¡ÂºÂ§u trÃ¡ÂºÂ£ hÃƒÂ ng - ${customerInfo.order_hash}`,
+        `[Sona Space] Đã duyệt yêu cầu trả hàng - ${customerInfo.order_hash}`,
         emailData,
         "return-approved"
       );
@@ -1973,7 +1984,7 @@ router.put("/:id/return-status", verifyToken, isAdmin, async (req, res) => {
         RETURNING couponcode_id`,
         [
           couponCode,
-          "MÃƒÂ£ giÃ¡ÂºÂ£m giÃƒÂ¡ 20% dÃƒÂ nh cho khÃƒÂ¡ch hÃƒÂ ng trÃ¡ÂºÂ£ hÃƒÂ ng thÃƒÂ nh cÃƒÂ´ng",
+          "Mã giảm giá 20% dành cho khách hàng trả hàng thành công",
           startDate,
           expDate,
           20,
@@ -1993,8 +2004,8 @@ router.put("/:id/return-status", verifyToken, isAdmin, async (req, res) => {
 
       await createUserNotification(client, {
         userId,
-        title: "BÃ¡ÂºÂ¡n nhÃ¡ÂºÂ­n Ã„â€˜Ã†Â°Ã¡Â»Â£c mÃƒÂ£ giÃ¡ÂºÂ£m giÃƒÂ¡ trÃ¡ÂºÂ£ hÃƒÂ ng",
-        message: `MÃƒÂ£ ${couponCode} giÃ¡ÂºÂ£m 20% Ã„â€˜ÃƒÂ£ Ã„â€˜Ã†Â°Ã¡Â»Â£c thÃƒÂªm vÃƒÂ o tÃƒÂ i khoÃ¡ÂºÂ£n cÃ¡Â»Â§a bÃ¡ÂºÂ¡n. HÃ¡ÂºÂ¡n dÃƒÂ¹ng: ${expDate.toLocaleDateString("vi-VN")}`,
+        title: "Bạn nhận được mã giảm giá trả hàng",
+        message: `Mã ${couponCode} giảm 20% đã được thêm vào tài khoản của bạn. Hạn dùng: ${expDate.toLocaleDateString("vi-VN")}`,
         link: "/profile/vouchers",
         senderId: req.user?.id || null,
         typeCodes: ["coupon", "promotion", "system"],
@@ -2022,24 +2033,24 @@ router.put("/:id/return-status", verifyToken, isAdmin, async (req, res) => {
 
     const statusText =
       responseStatusCode === ""
-        ? "KhÃƒÂ´ng cÃƒÂ³ hoÃƒÂ n trÃ¡ÂºÂ£"
+        ? "Không có hoàn trả"
         : responseStatusCode === "PENDING"
-          ? "Ã„Âang chÃ¡Â»Â xÃ¡Â»Â­ lÃƒÂ½"
+          ? "Đang chờ xử lý"
           : responseStatusCode === "APPROVED"
-            ? "Ã„ÂÃƒÂ£ duyÃ¡Â»â€¡t trÃ¡ÂºÂ£ hÃƒÂ ng"
+            ? "Đã duyệt trả hàng"
             : responseStatusCode === "CANCEL_CONFIRMED"
-              ? "XÃƒÂ¡c nhÃ¡ÂºÂ­n hÃ¡Â»Â§y Ã„â€˜Ã†Â¡n hÃƒÂ ng"
+              ? "Xác nhận hủy đơn hàng"
               : responseStatusCode === "CANCELLED"
-                ? "Ã„ÂÃƒÂ£ hÃ¡Â»Â§y hoÃƒÂ n tÃ¡ÂºÂ¥t"
+                ? "Đã hủy hoàn tất"
                 : responseStatusCode === "REJECTED"
-                  ? "TÃ¡Â»Â« chÃ¡Â»â€˜i trÃ¡ÂºÂ£ hÃƒÂ ng"
+                  ? "Từ chối trả hàng"
                   : RETURN_STATUS_CODE_TO_LABEL[
                     RETURN_STATUS_LABEL_TO_CODE[responseStatusCode]
                   ] || responseStatusCode;
 
     return res.status(200).json({
       success: true,
-      message: `Ã„ÂÃƒÂ£ cÃ¡ÂºÂ­p nhÃ¡ÂºÂ­t trÃ¡ÂºÂ¡ng thÃƒÂ¡i hoÃƒÂ n trÃ¡ÂºÂ£ thÃƒÂ nh: ${statusText}`,
+      message: `Đã cập nhật trạng thái hoàn trả thành: ${statusText}`,
       return_status: responseStatusCode,
     });
   } catch (error) {
@@ -2050,10 +2061,10 @@ router.put("/:id/return-status", verifyToken, isAdmin, async (req, res) => {
       });
     }
 
-    console.error("Ã¢ÂÅ’ LÃ¡Â»â€”i cÃ¡ÂºÂ­p nhÃ¡ÂºÂ­t trÃ¡ÂºÂ¡ng thÃƒÂ¡i hoÃƒÂ n trÃ¡ÂºÂ£:", error);
+    console.error("❌ Lỗi cập nhật trạng thái hoàn trả:", error);
     return res.status(500).json({
       success: false,
-      message: "LÃ¡Â»â€”i mÃƒÂ¡y chÃ¡Â»Â§ khi cÃ¡ÂºÂ­p nhÃ¡ÂºÂ­t trÃ¡ÂºÂ¡ng thÃƒÂ¡i hoÃƒÂ n trÃ¡ÂºÂ£",
+      message: "Lỗi máy chủ khi cập nhật trạng thái hoàn trả",
       error: error.message,
     });
   }
@@ -2062,7 +2073,7 @@ router.put("/:id/return-status", verifyToken, isAdmin, async (req, res) => {
 
 /**
  * @route   DELETE /api/orders/:id
- * @desc    HÃ¡Â»Â§y Ã„â€˜Ã†Â¡n hÃƒÂ ng (chÃ¡Â»â€° admin hoÃ¡ÂºÂ·c chÃ¡Â»Â§ Ã„â€˜Ã†Â¡n hÃƒÂ ng mÃ¡Â»â€ºi tÃ¡ÂºÂ¡o)
+ * @desc    Hủy đơn hàng (chỉ admin hoặc chủ đơn hàng mới tạo)
  * @access  Private
  */
 router.delete("/:id", verifyToken, async (req, res) => {
@@ -2073,7 +2084,7 @@ router.delete("/:id", verifyToken, async (req, res) => {
       return res.status(400).json({ error: "Invalid order ID" });
     }
 
-    // KiÃ¡Â»Æ’m tra Ã„â€˜Ã†Â¡n hÃƒÂ ng tÃ¡Â»â€œn tÃ¡ÂºÂ¡i
+    // Kiểm tra đơn hàng tồn tại
     const { rows: existingOrder } = await db.query(
       `
       SELECT order_id, user_id, order_status, created_at 
@@ -2089,14 +2100,14 @@ router.delete("/:id", verifyToken, async (req, res) => {
     const order = existingOrder[0];
     const currentStatus = toLegacyOrderStatus(order.order_status);
 
-    // KiÃ¡Â»Æ’m tra quyÃ¡Â»Ân hÃ¡Â»Â§y Ã„â€˜Ã†Â¡n hÃƒÂ ng
+    // Kiểm tra quyền hủy đơn hàng
     if (req.user.role !== "admin" && req.user.id !== order.user_id) {
       return res
         .status(403)
         .json({ error: "You do not have permission to cancel this order" });
     }
 
-    // ChÃ¡Â»â€° cho phÃƒÂ©p hÃ¡Â»Â§y Ã„â€˜Ã†Â¡n hÃƒÂ ng Ã¡Â»Å¸ trÃ¡ÂºÂ¡ng thÃƒÂ¡i PENDING hoÃ¡ÂºÂ·c CONFIRMED
+    // Chỉ cho phép hủy đơn hàng ở trạng thái PENDING hoặc CONFIRMED
     if (
       ![0, 1].includes(Number(order.order_status)) &&
       req.user.role !== "admin"
@@ -2106,7 +2117,7 @@ router.delete("/:id", verifyToken, async (req, res) => {
         .json({ error: "Cannot cancel order in current status" });
     }
 
-    // ChÃ¡Â»â€° khÃƒÂ¡ch hÃƒÂ ng mÃ¡Â»â€ºi Ã„â€˜Ã†Â°Ã¡Â»Â£c hÃ¡Â»Â§y Ã„â€˜Ã†Â¡n hÃƒÂ ng trong vÃƒÂ²ng 24 giÃ¡Â»Â sau khi tÃ¡ÂºÂ¡o
+    // Chỉ khách hàng mới được hủy đơn hàng trong vòng 24 giờ sau khi tạo
     if (req.user.role !== "admin") {
       const orderDate = new Date(order.created_at);
       const currentDate = new Date();
@@ -2120,7 +2131,7 @@ router.delete("/:id", verifyToken, async (req, res) => {
     }
 
     await withTransaction(async (client) => {
-      // LÃ¡ÂºÂ¥y danh sÃƒÂ¡ch sÃ¡ÂºÂ£n phÃ¡ÂºÂ©m trong Ã„â€˜Ã†Â¡n hÃƒÂ ng
+      // Lấy danh sách sản phẩm trong đơn hàng
       const { rows: orderItems } = await client.query(
         `
         SELECT oi.variant_id, oi.quantity, vp.product_id
@@ -2131,7 +2142,7 @@ router.delete("/:id", verifyToken, async (req, res) => {
         [orderId]
       );
 
-      // KhÃƒÂ´i phÃ¡Â»Â¥c sÃ¡Â»â€˜ lÃ†Â°Ã¡Â»Â£ng tÃ¡Â»â€œn kho
+      // Khôi phục số lượng tồn kho
       for (const item of orderItems) {
         if (item.variant_id) {
           await client.query(
@@ -2148,19 +2159,19 @@ router.delete("/:id", verifyToken, async (req, res) => {
         }
       }
 
-      // CÃ¡ÂºÂ­p nhÃ¡ÂºÂ­t trÃ¡ÂºÂ¡ng thÃƒÂ¡i Ã„â€˜Ã†Â¡n hÃƒÂ ng sang "Ã„ÂÃƒÂ£ hÃ¡Â»Â§y"
+      // Cập nhật trạng thái đơn hàng sang "Đã hủy"
       await client.query(
         "UPDATE orders SET order_status = $1, updated_at = NOW() WHERE order_id = $2",
         [-1, orderId]
       );
 
-      // HoÃƒÂ n tÃ¡ÂºÂ¥t payment trÃ¡ÂºÂ¡ng thÃƒÂ¡i hÃ¡Â»Â§y nÃ¡ÂºÂ¿u cÃƒÂ³
+      // Hoàn tất payment trạng thái hủy nếu có
       await client.query(
         "UPDATE payments SET payment_status = 'cancelled', updated_at = NOW() WHERE payment_id = (SELECT payment_id FROM orders WHERE order_id = $1)",
         [orderId]
       );
 
-      // ThÃƒÂªm vÃƒÂ o lÃ¡Â»â€¹ch sÃ¡Â»Â­ trÃ¡ÂºÂ¡ng thÃƒÂ¡i
+      // Thêm vào lịch sử trạng thái
       await client.query(
         `
         INSERT INTO order_status_log (
@@ -2172,7 +2183,7 @@ router.delete("/:id", verifyToken, async (req, res) => {
           Number(order.order_status),
           -1,
           req.user?.id || null,
-          `Ã„ÂÃ†Â¡n hÃƒÂ ng Ã„â€˜ÃƒÂ£ bÃ¡Â»â€¹ hÃ¡Â»Â§y (tÃ¡Â»Â« ${currentStatus})`,
+          `Đơn hàng đã bị hủy (từ ${currentStatus})`,
         ]
       );
     });
@@ -2186,7 +2197,7 @@ router.delete("/:id", verifyToken, async (req, res) => {
 
 /**
  * @route   GET /api/orders/status/count
- * @desc    LÃ¡ÂºÂ¥y sÃ¡Â»â€˜ lÃ†Â°Ã¡Â»Â£ng Ã„â€˜Ã†Â¡n hÃƒÂ ng theo trÃ¡ÂºÂ¡ng thÃƒÂ¡i (chÃ¡Â»â€° admin)
+ * @desc    Lấy số lượng đơn hàng theo trạng thái (chỉ admin)
  * @access  Private (Admin)
  */
 router.get("/status/count", verifyToken, isAdmin, async (req, res) => {
@@ -2197,17 +2208,17 @@ router.get("/status/count", verifyToken, isAdmin, async (req, res) => {
       GROUP BY order_status
     `);
 
-    // LÃ¡ÂºÂ¥y danh sÃƒÂ¡ch cÃƒÂ¡c trÃ¡ÂºÂ¡ng thÃƒÂ¡i cÃƒÂ³ thÃ¡Â»Æ’ cÃƒÂ³
+    // Lấy danh sách các trạng thái có thể có
     const statuses = [
-      { status: "PENDING", code: 0, name: "ChÃ¡Â»Â xÃƒÂ¡c nhÃ¡ÂºÂ­n" },
-      { status: "CONFIRMED", code: 1, name: "Ã„ÂÃƒÂ£ xÃƒÂ¡c nhÃ¡ÂºÂ­n" },
-      { status: "SHIPPING", code: 2, name: "Ã„Âang giao" },
-      { status: "DELIVERED", code: 3, name: "Ã„ÂÃƒÂ£ giao hÃƒÂ ng" },
-      { status: "SUCCESS", code: 4, name: "Giao hÃƒÂ ng thÃƒÂ nh cÃƒÂ´ng" },
-      { status: "CANCELLED", code: -1, name: "Ã„ÂÃƒÂ£ hÃ¡Â»Â§y" },
+      { status: "PENDING", code: 0, name: "Chờ xác nhận" },
+      { status: "CONFIRMED", code: 1, name: "Đã xác nhận" },
+      { status: "SHIPPING", code: 2, name: "Đang giao" },
+      { status: "DELIVERED", code: 3, name: "Đã giao hàng" },
+      { status: "SUCCESS", code: 4, name: "Giao hàng thành công" },
+      { status: "CANCELLED", code: -1, name: "Đã hủy" },
     ];
 
-    // TÃ¡ÂºÂ¡o Ã„â€˜Ã¡Â»â€˜i tÃ†Â°Ã¡Â»Â£ng thÃ¡Â»â€˜ng kÃƒÂª
+    // Tạo đối tượng thống kê
     const statistics = statuses.map((status) => {
       const count = result.find((r) => Number(r.order_status) === status.code);
       return {
@@ -2226,7 +2237,7 @@ router.get("/status/count", verifyToken, isAdmin, async (req, res) => {
 
 /**
  * @route   POST /api/orders/send-invoice
- * @desc    GÃ¡Â»Â­i hÃƒÂ³a Ã„â€˜Ã†Â¡n qua email
+ * @desc    Gửi hóa đơn qua email
  * @access  Private
  */
 router.post("/send-invoice", verifyToken, async (req, res) => {
@@ -2237,7 +2248,7 @@ router.post("/send-invoice", verifyToken, async (req, res) => {
     if (Number.isNaN(orderId) || !email) {
       return res.status(400).json({
         success: false,
-        message: "ThiÃ¡ÂºÂ¿u thÃƒÂ´ng tin Ã„â€˜Ã†Â¡n hÃƒÂ ng hoÃ¡ÂºÂ·c email",
+        message: "Thiếu thông tin đơn hàng hoặc email",
       });
     }
 
@@ -2251,7 +2262,7 @@ router.post("/send-invoice", verifyToken, async (req, res) => {
     if (orders.length === 0) {
       return res
         .status(404)
-        .json({ success: false, message: "KhÃƒÂ´ng tÃƒÂ¬m thÃ¡ÂºÂ¥y Ã„â€˜Ã†Â¡n hÃƒÂ ng" });
+        .json({ success: false, message: "Không tìm thấy đơn hàng" });
     }
 
     const order = orders[0];
@@ -2270,12 +2281,12 @@ router.post("/send-invoice", verifyToken, async (req, res) => {
 
     const invoiceUrl = `${process.env.SITE_URL || "http://localhost:3501"}/dashboard/orders/invoice/${orderId}`;
 
-    console.log(`GÃ¡Â»Â­i hÃƒÂ³a Ã„â€˜Ã†Â¡n #${orderId} Ã„â€˜Ã¡ÂºÂ¿n email: ${email}`);
-    console.log(`URL hÃƒÂ³a Ã„â€˜Ã†Â¡n: ${invoiceUrl}`);
+    console.log(`Gửi hóa đơn #${orderId} đến email: ${email}`);
+    console.log(`URL hóa đơn: ${invoiceUrl}`);
 
     return res.json({
       success: true,
-      message: "HÃƒÂ³a Ã„â€˜Ã†Â¡n Ã„â€˜ÃƒÂ£ Ã„â€˜Ã†Â°Ã¡Â»Â£c gÃ¡Â»Â­i thÃƒÂ nh cÃƒÂ´ng",
+      message: "Hóa đơn đã được gửi thành công",
       data: {
         order_id: orderId,
         email,
@@ -2288,7 +2299,7 @@ router.post("/send-invoice", verifyToken, async (req, res) => {
     console.error("Error sending invoice:", error);
     return res.status(500).json({
       success: false,
-      message: "LÃ¡Â»â€”i khi gÃ¡Â»Â­i hÃƒÂ³a Ã„â€˜Ã†Â¡n",
+      message: "Lỗi khi gửi hóa đơn",
       error: error.message,
     });
   }
@@ -2296,7 +2307,7 @@ router.post("/send-invoice", verifyToken, async (req, res) => {
 
 /**
  * @route   POST /api/orders/:id/send-apology-email
- * @desc    GÃ¡Â»Â­i email xin lÃ¡Â»â€”i cho khÃƒÂ¡ch hÃƒÂ ng
+ * @desc    Gửi email xin lỗi cho khách hàng
  * @access  Private (Admin)
  */
 router.post(
@@ -2311,7 +2322,7 @@ router.post(
       if (Number.isNaN(orderId)) {
         return res.status(400).json({
           success: false,
-          message: "MÃƒÂ£ Ã„â€˜Ã†Â¡n hÃƒÂ ng khÃƒÂ´ng hÃ¡Â»Â£p lÃ¡Â»â€¡",
+          message: "Mã đơn hàng không hợp lệ",
         });
       }
 
@@ -2333,7 +2344,7 @@ router.post(
       if (orders.length === 0) {
         return res.status(404).json({
           success: false,
-          message: "KhÃƒÂ´ng tÃƒÂ¬m thÃ¡ÂºÂ¥y Ã„â€˜Ã†Â¡n hÃƒÂ ng",
+          message: "Không tìm thấy đơn hàng",
         });
       }
 
@@ -2342,23 +2353,23 @@ router.post(
       if (!order.user_gmail) {
         return res.status(400).json({
           success: false,
-          message: "Ã„ÂÃ†Â¡n hÃƒÂ ng khÃƒÂ´ng cÃƒÂ³ email khÃƒÂ¡ch hÃƒÂ ng",
+          message: "Đơn hàng không có email khách hàng",
         });
       }
 
       const voucherCode = `SORRY${order.order_id}${Date.now().toString().slice(-4)}`;
       const emailData = {
-        customerName: order.user_name || "QuÃƒÂ½ khÃƒÂ¡ch",
+        customerName: order.user_name || "Quý khách",
         orderId: order.order_id,
         orderHash: order.order_hash,
         orderTotal: new Intl.NumberFormat("vi-VN", {
           style: "currency",
           currency: "VND",
         }).format(order.order_total_final),
-        reason: reason || "SÃ¡Â»Â± cÃ¡Â»â€˜ kÃ¡Â»Â¹ thuÃ¡ÂºÂ­t",
+        reason: reason || "Sự cố kỹ thuật",
         message:
           message ||
-          "ChÃƒÂºng tÃƒÂ´i xin lÃ¡Â»â€”i vÃƒÂ¬ sÃ¡Â»Â± bÃ¡ÂºÂ¥t tiÃ¡Â»â€¡n nÃƒÂ y vÃƒÂ  sÃ¡ÂºÂ½ khÃ¡ÂºÂ¯c phÃ¡Â»Â¥c sÃ¡Â»â€ºm nhÃ¡ÂºÂ¥t cÃƒÂ³ thÃ¡Â»Æ’.",
+          "Chúng tôi xin lỗi vì sự bất tiện này và sẽ khắc phục sớm nhất có thể.",
         voucherCode,
         discountPercent: 20,
         expiryDate: new Date(
@@ -2369,19 +2380,19 @@ router.post(
 
       const emailResult = await sendEmail1(
         order.user_gmail,
-        "Xin lÃ¡Â»â€”i vÃ¡Â»Â sÃ¡Â»Â± cÃ¡Â»â€˜ Ã„â€˜Ã†Â¡n hÃƒÂ ng - Sona Space",
+        "Xin lỗi về sự cố đơn hàng - Sona Space",
         emailData,
         "apology"
       );
 
       if (emailResult.success) {
         console.log(
-          `Ã¢Å“â€¦ Sent apology email for order ${order.order_id} to ${order.user_gmail}`
+          `✅ Sent apology email for order ${order.order_id} to ${order.user_gmail}`
         );
 
         return res.json({
           success: true,
-          message: "Email xin lÃ¡Â»â€”i Ã„â€˜ÃƒÂ£ Ã„â€˜Ã†Â°Ã¡Â»Â£c gÃ¡Â»Â­i thÃƒÂ nh cÃƒÂ´ng",
+          message: "Email xin lỗi đã được gửi thành công",
           data: {
             order_id: order.order_id,
             email: order.user_gmail,
@@ -2393,12 +2404,12 @@ router.post(
         });
       }
 
-      throw new Error(emailResult.error || "KhÃƒÂ´ng thÃ¡Â»Æ’ gÃ¡Â»Â­i email");
+      throw new Error(emailResult.error || "Không thể gửi email");
     } catch (error) {
-      console.error("Ã¢ÂÅ’ Error sending apology email:", error);
+      console.error("❌ Error sending apology email:", error);
       return res.status(500).json({
         success: false,
-        message: "LÃ¡Â»â€”i khi gÃ¡Â»Â­i email xin lÃ¡Â»â€”i",
+        message: "Lỗi khi gửi email xin lỗi",
         error: error.message,
       });
     }
@@ -2553,11 +2564,11 @@ router.post(
       if (!reason) {
         return res.status(400).json({
           success: false,
-          message: "Vui lÃƒÂ²ng cung cÃ¡ÂºÂ¥p lÃƒÂ½ do trÃ¡ÂºÂ£ hÃƒÂ ng",
+          message: "Vui lòng cung cấp lý do trả hàng",
         });
       }
 
-      // TÃƒÂ¬m Ã„â€˜Ã†Â¡n hÃƒÂ ng dÃ¡Â»Â±a trÃƒÂªn order_hash
+      // Tìm đơn hàng dựa trên order_hash
       const { rows: orderRows } = await db.query(
         `SELECT o.order_id, o.user_id, o.order_status, o.created_at, o.order_hash,
        o.order_name, o.order_email,
@@ -2572,27 +2583,27 @@ router.post(
       if (!order) {
         return res.status(404).json({
           success: false,
-          message: "KhÃƒÂ´ng tÃƒÂ¬m thÃ¡ÂºÂ¥y Ã„â€˜Ã†Â¡n hÃƒÂ ng",
+          message: "Không tìm thấy đơn hàng",
         });
       }
 
-      // KiÃ¡Â»Æ’m tra quyÃ¡Â»Ân truy cÃ¡ÂºÂ­p (chÃ¡Â»â€° admin hoÃ¡ÂºÂ·c chÃ¡Â»Â§ Ã„â€˜Ã†Â¡n hÃƒÂ ng)
+      // Kiểm tra quyền truy cập (chỉ admin hoặc chủ đơn hàng)
       if (!isAdmin && user_id !== order.user_id) {
         return res.status(403).json({
           success: false,
-          message: "BÃ¡ÂºÂ¡n khÃƒÂ´ng cÃƒÂ³ quyÃ¡Â»Ân trÃ¡ÂºÂ£ lÃ¡ÂºÂ¡i Ã„â€˜Ã†Â¡n hÃƒÂ ng nÃƒÂ y",
+          message: "Bạn không có quyền trả lại đơn hàng này",
         });
       }
 
-      // KiÃ¡Â»Æ’m tra trÃ¡ÂºÂ¡ng thÃƒÂ¡i Ã„â€˜Ã†Â¡n hÃƒÂ ng (chÃ¡Â»â€° cho phÃƒÂ©p trÃ¡ÂºÂ£ hÃƒÂ ng khi Ã„â€˜Ã†Â¡n hÃƒÂ ng Ã„â€˜ÃƒÂ£ hoÃƒÂ n thÃƒÂ nh)
+      // Kiểm tra trạng thái đơn hàng (chỉ cho phép trả hàng khi đơn hàng đã hoàn thành)
       if (Number(order.order_status) !== ORDER_STATUS_KEY_TO_CODE.SUCCESS) {
         return res.status(400).json({
           success: false,
-          message: "ChÃ¡Â»â€° cÃƒÂ³ thÃ¡Â»Æ’ trÃ¡ÂºÂ£ lÃ¡ÂºÂ¡i Ã„â€˜Ã†Â¡n hÃƒÂ ng Ã„â€˜ÃƒÂ£ giao thÃƒÂ nh cÃƒÂ´ng",
+          message: "Chỉ có thể trả lại đơn hàng đã giao thành công",
         });
       }
 
-      // Upload hÃƒÂ¬nh Ã¡ÂºÂ£nh lÃƒÂªn Cloudinary
+      // Upload hình ảnh lên Cloudinary
       let uploadedImageUrls = [];
       if (uploadedFiles.length > 0) {
         try {
@@ -2622,15 +2633,15 @@ router.post(
 
           uploadedImageUrls = await Promise.all(uploadPromises);
           console.log(
-            "Ã„ÂÃƒÂ£ upload thÃƒÂ nh cÃƒÂ´ng:",
+            "Đã upload thành công:",
             uploadedImageUrls.length,
-            "hÃƒÂ¬nh Ã¡ÂºÂ£nh"
+            "hình ảnh"
           );
         } catch (uploadError) {
-          console.error("LÃ¡Â»â€”i upload hÃƒÂ¬nh Ã¡ÂºÂ£nh:", uploadError);
+          console.error("Lỗi upload hình ảnh:", uploadError);
           return res.status(500).json({
             success: false,
-            message: "LÃ¡Â»â€”i khi upload hÃƒÂ¬nh Ã¡ÂºÂ£nh",
+            message: "Lỗi khi upload hình ảnh",
             error: uploadError.message,
           });
         }
@@ -2663,7 +2674,7 @@ router.post(
           );
 
           if (!itemsToReturn.length) {
-            throw new Error("KhÃƒÂ´ng tÃƒÂ¬m thÃ¡ÂºÂ¥y sÃ¡ÂºÂ£n phÃ¡ÂºÂ©m hÃ¡Â»Â£p lÃ¡Â»â€¡ Ã„â€˜Ã¡Â»Æ’ trÃ¡ÂºÂ£ lÃ¡ÂºÂ¡i");
+            throw new Error("Không tìm thấy sản phẩm hợp lệ để trả lại");
           }
         }
 
@@ -2752,7 +2763,7 @@ router.post(
            SET order_note = COALESCE(order_note, '') || $1,
                updated_at = NOW()
            WHERE order_id = $2`,
-          [`\nYÃƒÂªu cÃ¡ÂºÂ§u hoÃƒÂ n trÃ¡ÂºÂ£. LÃƒÂ½ do: ${reason}`, order.order_id]
+          [`\nYêu cầu hoàn trả. Lý do: ${reason}`, order.order_id]
         );
 
         await client.query(
@@ -2763,7 +2774,7 @@ router.post(
             Number(order.order_status),
             Number(order.order_status),
             req.user?.id || null,
-            `YÃƒÂªu cÃ¡ÂºÂ§u hoÃƒÂ n trÃ¡ÂºÂ£ Ã„â€˜Ã†Â°Ã¡Â»Â£c tÃ¡ÂºÂ¡o bÃ¡Â»Å¸i ${isAdmin ? "admin" : "user"}`,
+            `Yêu cầu hoàn trả được tạo bởi ${isAdmin ? "admin" : "user"}`,
           ]
         );
 
@@ -2771,7 +2782,7 @@ router.post(
           const { rows: adminRows } = await client.query(
             `SELECT user_id
              FROM "user"
-             WHERE LOWER(user_role) = 'admin'
+              WHERE user_role::text = 'admin'
              ORDER BY user_id
              LIMIT 1`
           );
@@ -2779,8 +2790,8 @@ router.post(
           if (adminRows.length > 0) {
             await createUserNotification(client, {
               userId: adminRows[0].user_id,
-              title: "YÃƒÂªu cÃ¡ÂºÂ§u trÃ¡ÂºÂ£ hÃƒÂ ng mÃ¡Â»â€ºi",
-              message: `Ã„ÂÃ†Â¡n hÃƒÂ ng #${order.order_hash} cÃƒÂ³ yÃƒÂªu cÃ¡ÂºÂ§u trÃ¡ÂºÂ£ hÃƒÂ ng mÃ¡Â»â€ºi vÃ¡Â»â€ºi ${uploadedImageUrls.length} hÃƒÂ¬nh Ã¡ÂºÂ£nh`,
+              title: "Yêu cầu trả hàng mới",
+              message: `Đơn hàng #${order.order_hash} có yêu cầu trả hàng mới với ${uploadedImageUrls.length} hình ảnh`,
               link: `/dashboard/orders/details/${order.order_id}`,
               senderId: req.user?.id || null,
               typeCodes: ["order", "system"],
@@ -2811,11 +2822,11 @@ router.post(
 
       return res.status(200).json({
         success: true,
-        message: "YÃƒÂªu cÃ¡ÂºÂ§u trÃ¡ÂºÂ£ hÃƒÂ ng Ã„â€˜ÃƒÂ£ Ã„â€˜Ã†Â°Ã¡Â»Â£c ghi nhÃ¡ÂºÂ­n",
+        message: "Yêu cầu trả hàng đã được ghi nhận",
         data: responseData,
       });
     } catch (error) {
-      console.error("LÃ¡Â»â€”i khi xÃ¡Â»Â­ lÃƒÂ½ yÃƒÂªu cÃ¡ÂºÂ§u trÃ¡ÂºÂ£ hÃƒÂ ng:", error);
+      console.error("Lỗi khi xử lý yêu cầu trả hàng:", error);
 
       if (uploadedImageUrls.length > 0) {
         try {
@@ -2826,13 +2837,13 @@ router.post(
             })
           );
         } catch (deleteError) {
-          console.error("LÃ¡Â»â€”i khi xÃƒÂ³a hÃƒÂ¬nh Ã¡ÂºÂ£nh sau rollback:", deleteError);
+          console.error("Lỗi khi xóa hình ảnh sau rollback:", deleteError);
         }
       }
 
       return res.status(500).json({
         success: false,
-        message: "Ã„ÂÃƒÂ£ xÃ¡ÂºÂ£y ra lÃ¡Â»â€”i khi xÃ¡Â»Â­ lÃƒÂ½ yÃƒÂªu cÃ¡ÂºÂ§u trÃ¡ÂºÂ£ hÃƒÂ ng",
+        message: "Đã xảy ra lỗi khi xử lý yêu cầu trả hàng",
         error: error.message,
       });
     }
