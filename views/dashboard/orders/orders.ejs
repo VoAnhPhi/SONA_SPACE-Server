@@ -2,9 +2,6 @@
 <!-- Thêm jQuery và Bootstrap JS -->
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/js/bootstrap.bundle.min.js"></script>
-<!-- Thêm Ant Design -->
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/antd@4.24.15/dist/antd.min.css">
-<script src="https://cdn.jsdelivr.net/npm/antd@4.24.15/dist/antd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.10/dayjs.min.js"></script>
 
 <style>
@@ -244,15 +241,6 @@
           <div class="search-input">
             <i class="fas fa-search search-icon"></i>
             <input type="text" placeholder="Tìm kiếm đơn hàng..." id="search-orders">
-          </div>
-
-          <div class="date-range">
-            <i class="far fa-calendar-alt calendar-icon"></i>
-            <span>1/05/2025 - 31/5/2025</span>
-          </div>
-
-          <div class="filter-btn">
-            <span>Hiển thị 6 trên tổng số 500</span>
           </div>
         </div>
 
@@ -559,14 +547,7 @@
           </table>
 
           <div class="table-footer">
-            <div class="showing-info" id="orders-showing-info">Hiển thị 1-8 trên tổng số 20 đơn hàng</div>
-            <div class="pagination">
-              <button class="page-item disabled"><i class="fas fa-chevron-left"></i></button>
-              <button class="page-item active">1</button>
-              <button class="page-item">2</button>
-              <button class="page-item">3</button>
-              <button class="page-item"><i class="fas fa-chevron-right"></i></button>
-            </div>
+            <div class="showing-info" id="orders-showing-info" aria-live="polite"></div>
           </div>
         </div>
       </div>
@@ -968,8 +949,10 @@
 
         // Lọc các đơn hàng theo phương thức thanh toán
         rows.forEach(row => {
-          const paymentMethod = row.querySelectorAll('td')[9].textContent.trim();
-          row.style.display = paymentMethod.includes(methodToFilter) ? '' : 'none';
+          // Filter on the normalized code; the visible text is a friendly label
+          const methodCell = row.querySelectorAll('td')[9];
+          const paymentMethod = methodCell.dataset.method || methodCell.textContent.trim().toUpperCase();
+          row.style.display = paymentMethod === methodToFilter ? '' : 'none';
         });
         return; // Không cần sắp xếp lại
 
@@ -1026,6 +1009,8 @@
       if (!data.success) throw new Error(data.message);
 
       const orders = data.orders;
+      // The admin endpoint returns every order, so the table shows them all
+      document.getElementById('orders-showing-info').textContent = `${orders.length} đơn hàng`;
       const tbody = document.getElementById('orders-list');
       tbody.innerHTML = ''; // Clear cũ
 
@@ -1039,13 +1024,7 @@
         if (paginationData && paginationData.pagination && paginationData.pagination.totalOrders) {
           document.getElementById('total-orders').textContent = paginationData.pagination.totalOrders;
 
-          // Update showing info in table footer
-          const showingInfo = document.getElementById('orders-showing-info');
-          if (showingInfo) {
-            const start = 1;
-            const end = Math.min(orders.length, 10);
-            showingInfo.textContent = `Hiển thị ${start}-${end} trên tổng số ${paginationData.pagination.totalOrders} đơn hàng`;
-          }
+
         }
       } catch (paginationErr) {
       }
@@ -1102,7 +1081,7 @@
             <option value="RETURN" ${order.current_status === 'RETURN' ? 'selected' : ''}>Đã hoàn trả</option>
           </select>
         </td>
-        <td>${paymentMethod}</td>
+        <td data-method="${paymentMethodCode(paymentMethod)}">${paymentMethodLabel(paymentMethod)}</td>
         <td>
           <div class="actions">
             <a href="/dashboard/orders/detail/${order.order_id}" class="action-btn view-btn" title="Xem chi tiết"><i class="fas fa-pencil"></i></a>
@@ -1141,18 +1120,30 @@
     }
   }
 
+  // Payment methods are stored in either case ("cod", "MOMO"); filter on the code, show a label
+  function paymentMethodCode(method) {
+    return String(method || '').trim().toUpperCase();
+  }
+
+  function paymentMethodLabel(method) {
+    const labels = { COD: 'COD', BANK_TRANSFER: 'Chuyển khoản', VNPAY: 'VNPay', MOMO: 'MoMo', ZALOPAY: 'ZaloPay' };
+    const code = paymentMethodCode(method);
+    return labels[code] || (code && code !== 'N/A' ? code : 'Chưa có');
+  }
+
+  // Payment statuses arrive in either case ("pending" or "PENDING")
   function mapPaymentStatus(status) {
-    switch (status) {
+    switch (String(status || '').toUpperCase()) {
       case 'PENDING': return 'Chờ thanh toán';
       case 'SUCCESS': return 'Đã thanh toán';
       case 'FAILED': return 'Thanh toán thất bại';
       case 'REFUNDED': return 'Đã hoàn tiền';
-      default: return status || 'Chờ thanh toán';
+      default: return 'Chờ thanh toán';
     }
   }
 
   function mapPaymentStatusClass(status) {
-    switch (status) {
+    switch (String(status || '').toUpperCase()) {
       case 'PENDING': return 'pending';
       case 'SUCCESS': return 'paid';
       case 'FAILED': return 'failed';

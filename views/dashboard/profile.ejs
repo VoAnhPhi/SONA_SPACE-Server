@@ -1,13 +1,31 @@
 <div class="dashboard-header-row">
-  <h2 class="dashboard-title">H? So Qu?n Tr?</h2>
+  <h1 class="dashboard-title">Hồ sơ quản trị</h1>
 </div>
 
 <div class="add-category-container">
-  <div class="form-section">
-    <h3 class="section-title">T�i kho?n</h3>
-    <p>B?n c� th? ch?nh s?a th�ng tin t�i kho?n trong trang qu?n l� ngu?i d�ng.</p>
-    <div class="form-actions">
-      <button type="button" class="btn btn-save" onclick="window.location.href='/dashboard/users'">�?n trang ngu?i d�ng</button>
+  <div class="category-form-column">
+    <div class="form-section">
+      <h2 class="section-title">Tài khoản</h2>
+      <dl class="profile-details">
+        <div><dt>Họ và tên</dt><dd id="profile-name">--</dd></div>
+        <div><dt>Email</dt><dd id="profile-email">--</dd></div>
+        <div><dt>Vai trò</dt><dd id="profile-role">--</dd></div>
+      </dl>
+      <p class="upload-hint">Thông tin tài khoản được chỉnh sửa trong trang quản lý người dùng.</p>
+      <div class="form-actions">
+        <a class="btn btn-save" href="/dashboard/users">Đến trang người dùng</a>
+      </div>
     </div>
   </div>
 </div>
+
+<script>
+  // The signed-in account is kept in localStorage by the login page
+  document.addEventListener("DOMContentLoaded", () => {
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
+    const roles = { admin: "Quản trị viên", staff: "Nhân viên" };
+    document.getElementById("profile-name").textContent = user.full_name || "--";
+    document.getElementById("profile-email").textContent = user.email || "--";
+    document.getElementById("profile-role").textContent = roles[user.role] || user.role || "--";
+  });
+</script>

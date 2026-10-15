@@ -1,100 +1,3 @@
-/* Header */
-.dashboard-header {
-  height: var(--header-height);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 20px;
-  background-color: #fff;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.header-left,
-.header-right {
-  display: flex;
-  align-items: center;
-}
-
-.page-tabs {
-  display: flex;
-  align-items: center;
-  margin-right: 10px;
-  color: var(--text-secondary);
-  font-size: 13px;
-}
-
-.page-tabs i {
-  margin-right: 5px;
-}
-
-.current-tab {
-  font-weight: 500;
-  color: var(--text-primary);
-  font-size: 13px;
-}
-
-.theme-toggle,
-.history-button,
-.notifications {
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-right: 10px;
-  border-radius: 4px;
-  cursor: pointer;
-  color: var(--text-secondary);
-}
-
-.theme-toggle:hover,
-.history-button:hover,
-.notifications:hover {
-  background-color: var(--bg-light);
-  color: var(--text-primary);
-}
-
-.user-profile {
-  display: flex;
-  align-items: center;
-  cursor: pointer;
-}
-
-.avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  overflow: hidden;
-  margin-right: 8px;
-}
-
-.avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.user-info {
-  display: flex;
-  flex-direction: column;
-  margin-right: 5px;
-}
-
-.user-name {
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.user-role {
-  font-size: 11px;
-  color: var(--text-secondary);
-}
-
-.dropdown-arrow {
-  color: var(--text-secondary);
-  font-size: 10px;
-}
-
 /* Content Container */
 .content-container {
   flex: 1;
@@ -474,20 +377,6 @@
 }
 
 @media (max-width: 768px) {
-  .sidebar {
-    width: 60px;
-  }
-
-  .sidebar .brand,
-  .sidebar .menu-section-title,
-  .sidebar .nav-item a span {
-    display: none;
-  }
-
-  .main-content {
-    margin-left: 60px;
-  }
-
   .stats-container {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -497,8 +386,236 @@
   .stats-container {
     grid-template-columns: 1fr;
   }
+}
 
-  .user-info {
-    display: none;
+/* ---------- Overview (Sprint 19, concept O2) ---------- */
+.dashboard-subtitle {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: $text-gray;
+}
+
+// These are <section>s; the template's global "section { margin-top: 94px }" does not apply here
+.kpi-strip,
+.overview-card {
+  margin-top: 0 !important;
+}
+
+.kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin-bottom: 16px;
+  background: $white-cl;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+
+  &__item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    padding: 14px 18px;
+
+    & + & {
+      border-left: 1px solid var(--border-color);
+    }
+  }
+
+  &__label {
+    font-family: "Be-M";
+    font-size: 12px;
+    color: $text-gray;
+  }
+
+  &__value {
+    overflow: hidden;
+    font-family: "M-SB";
+    font-size: 22px;
+    font-weight: normal;
+    color: $dark-cl;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__note {
+    font-size: 12px;
+    color: $text-gray;
   }
 }
+
+.overview-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.overview-card {
+  min-width: 0;
+  background: $white-cl;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+
+  &--wide {
+    grid-column: 1 / -1;
+  }
+
+  &__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border-color);
+
+    h2 {
+      margin: 0;
+      font-family: "Be-SB";
+      font-size: 15px;
+      font-weight: normal;
+      color: $dark-cl;
+    }
+  }
+
+  .chart-header-right {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+
+    select,
+    input {
+      height: 34px;
+      padding: 0 10px;
+      border: 1px solid rgba(0, 0, 0, 0.14);
+      border-radius: var(--radius-sm);
+      background: $white-cl;
+      font-family: "Be-R";
+      font-size: 13px;
+      color: $dark-cl;
+
+      &:focus {
+        outline: none;
+        border-color: $dark-cl;
+      }
+    }
+  }
+
+  .chart-wrapper {
+    position: relative;
+    height: 280px;
+    padding: 14px 18px 18px;
+  }
+}
+
+.todo-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  &__item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 18px;
+
+    & + & {
+      border-top: 1px solid var(--border-color);
+    }
+  }
+
+  &__icon {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 34px;
+    height: 34px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+
+    &--wait {
+      background: rgba(245, 180, 0, 0.16);
+      color: #8a6200;
+    }
+
+    &--info {
+      background: rgba(0, 120, 215, 0.1);
+      color: #005ea8;
+    }
+
+    &--design {
+      background: var(--primary-light);
+      color: $dark-cl;
+    }
+  }
+
+  &__text {
+    display: flex;
+    flex: 1;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+
+    strong {
+      font-family: "M-SB";
+      font-size: 18px;
+      font-weight: normal;
+      color: $dark-cl;
+    }
+
+    span {
+      font-size: 13.5px;
+      color: $text-cl;
+    }
+  }
+
+  &__action {
+    min-height: 32px !important;
+    padding: 0 12px !important;
+    text-decoration: none;
+  }
+}
+
+@media (max-width: 1199px) {
+  .kpi-strip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+
+    &__item:nth-child(4) {
+      border-left: 0;
+    }
+
+    &__item:nth-child(n + 4) {
+      border-top: 1px solid var(--border-color);
+    }
+  }
+
+  .overview-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 767px) {
+  .kpi-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+
+    &__item:nth-child(n) {
+      border-left: 0;
+      border-top: 1px solid var(--border-color);
+    }
+
+    &__item:nth-child(-n + 2) {
+      border-top: 0;
+    }
+
+    &__item:nth-child(even) {
+      border-left: 1px solid var(--border-color);
+    }
+
+    &__item:last-child {
+      grid-column: 1 / -1;
+      border-left: 0;
+    }
+  }
+}
+

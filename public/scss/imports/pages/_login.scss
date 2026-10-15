@@ -1,223 +1,244 @@
-.container-fluid {
-  display: flex;
-  width: 100%;
-  height: 100dvh;
-  background-color: #fff;
-  border-radius: 20px;
-  overflow: hidden;
-}
+// Admin login (views/layouts/main.ejs), concept L1: interior photo + form.
+// Everything is scoped to .login-page so nothing leaks into the dashboard.
+.login-page {
+  margin: 0;
+  background: $white-cl;
+  font-family: "Be-R", sans-serif;
+  color: $text-cl;
 
-.left-panel {
-  width: 70%;
-  background-color: #f0a00a;
-  color: white;
-  padding: 60px 40px;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
+  .d-none {
+    display: none !important;
+  }
 
-.brand-name {
-  @include text(42px, M-B, auto, $white-cl, null);
-  margin-bottom: 10px;
-}
+  // The template's global "section" rules (94px top margin, centered 18px paragraphs) do not apply here
+  section {
+    margin-top: 0 !important;
 
-.brand-slogan {
-  @include text(18px, M-SB, auto, $white-cl, null);
-  margin-bottom: 30px;
-}
+    p {
+      margin-bottom: 0;
+      text-align: left;
+    }
+  }
 
-.read-more-btn {
-  display: inline-block;
-  background-color: rgba(255, 255, 255, 0.2);
-  color: white;
-  padding: 12px 30px;
-  border-radius: 30px;
-  text-decoration: none;
-  font-weight: 500;
-  transition: all 0.3s ease;
-  width: fit-content;
-  @include text(16px, M-SB, auto, $white-cl, null);
-}
+  .login-shell {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    min-height: 100dvh;
+  }
 
-.read-more-btn:hover {
-  background-color: rgba(255, 255, 255, 0.3);
-}
+  .login-art {
+    position: relative;
+    overflow: hidden;
+    background: #111;
 
-.wave-bg {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  height: 200px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 320'%3E%3Cpath fill='%230055b3' fill-opacity='0.3' d='M0,224L60,213.3C120,203,240,181,360,181.3C480,181,600,203,720,208C840,213,960,203,1080,181.3C1200,160,1320,128,1380,112L1440,96L1440,320L1380,320C1320,320,1200,320,1080,320C960,320,840,320,720,320C600,320,480,320,360,320C240,320,120,320,60,320L0,320Z'%3E%3C/path%3E%3C/svg%3E");
-  background-size: cover;
-  background-position: center;
-  opacity: 0.5;
-  pointer-events: none;
-}
+    &::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(0deg, rgba(0, 0, 0, 0.62) 0%, rgba(0, 0, 0, 0.08) 55%);
+    }
 
-.right-panel {
-  width: 50%;
-  padding: 60px 40px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
+    &__photo {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    &__caption {
+      position: absolute;
+      left: 40px;
+      right: 40px;
+      bottom: 36px;
+      z-index: 1;
+
+      p {
+        margin: 12px 0 0;
+        font-size: 14px;
+        color: rgba(255, 255, 255, 0.82);
+      }
+    }
+
+    &__logo {
+      display: block;
+      width: 120px;
+      height: auto;
+    }
+  }
+
+  .login-panel {
+    display: grid;
+    align-content: center;
+    justify-items: center;
+    padding: 48px 32px;
+  }
+
+  .login-box {
+    display: grid;
+    gap: 22px;
+    width: 100%;
+    max-width: 380px;
+
+    &__logo {
+      display: none;
+      width: 100px;
+      height: auto;
+    }
+  }
 
   .welcome-text {
-    text-align: center;
-    margin-bottom: 40px;
-  }
+    h1 {
+      margin: 0;
+      font-family: "M-SB";
+      font-size: 26px;
+      font-weight: normal;
+      color: $dark-cl;
+    }
 
-  .welcome-text h2 {
-    @include text(28px, M-SB, auto, $black-cl, null);
-    margin-bottom: 12px;
-  }
-
-  .welcome-text p {
-    @include text(16px, Be-R, auto, $black-cl, null);
+    p {
+      margin: 6px 0 0;
+      font-size: 14px;
+      color: $text-gray;
+    }
   }
 
   .login-form {
-    display: flex;
-    flex-direction: column;
-    width: 100%;
-    max-width: 350px;
-    margin: 0 auto;
+    display: grid;
+    gap: 16px;
+  }
 
-    .form-group {
-      min-height: 82px;
+  .form-group {
+    display: grid;
+    gap: 6px;
+
+    label {
+      font-family: "Be-M";
+      font-size: 13px;
+      color: #4a473e;
     }
   }
 
   .input-wrapper {
     position: relative;
-    width: 100%;
-  }
-
-  .form-control.is-invalid {
-    border-color: $error-cl;
-    background-color: rgba(220, 53, 69, 0.05);
-  }
-
-  .form-control.is-valid {
-    border-color: $success-cl;
-    background-color: rgba(40, 167, 69, 0.05);
-  }
-
-  .error-message {
-    color: $error-cl;
-    @include text(12px, Be-R, auto, $error-cl, null);
-    margin-top: 5px;
-    min-height: 18px;
-    font-weight: 500;
-    cursor: default;
-    user-select: none;
-    caret-color: transparent;
-    pointer-events: none;
-  }
-
-  .password-toggle {
-    position: absolute;
-    right: 16px;
-    top: 37%;
-    transform: translateY(-50%);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    cursor: pointer;
-    color: #666;
-    z-index: 10;
-  }
-
-  .password-toggle:hover {
-    color: #0066cc;
-  }
-
-  .password-strength {
-    height: 5px;
-    margin-top: 5px;
-    border-radius: 3px;
-    transition: all 0.3s ease;
-  }
-
-  .password-strength.weak {
-    background-color: $error-cl;
-    width: 25%;
-  }
-
-  .password-strength.medium {
-    background-color: $warning-cl;
-    width: 50%;
-  }
-
-  .password-strength.strong {
-    background-color: $success-cl;
-    width: 100%;
   }
 
   .form-control {
     width: 100%;
-    padding: 12px 42px 12px 16px;
-    border: 1px solid #ddd;
+    height: 46px;
+    padding: 0 14px;
+    border: 1px solid rgba(0, 0, 0, 0.14);
     border-radius: 8px;
-    @include text(16px, Be-R, normal, $black-cl, null);
-    outline: none;
-    transition: border-color 0.3s;
+    background: $white-cl;
+    font-family: "Be-R";
+    font-size: 14px;
+    color: $text-cl;
+    transition: border-color 0.2s;
+
+    &::placeholder {
+      color: #a5a296;
+    }
+
+    &:focus {
+      border-color: $dark-cl;
+      outline: none;
+    }
+
+    &.is-invalid {
+      border-color: $error-cl;
+    }
   }
 
-  .form-control:focus {
-    border-color: #0066cc;
+  #password {
+    padding-right: 46px;
+  }
+
+  .password-toggle {
+    position: absolute;
+    top: 50%;
+    right: 6px;
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: $gray-cl-5;
+    cursor: pointer;
+    transform: translateY(-50%);
+
+    &:hover {
+      background: #f4f3ef;
+      color: $dark-cl;
+    }
+  }
+
+  .error-message {
+    min-height: 0;
+    font-size: 12.5px;
+    color: $error-cl;
+
+    &:empty {
+      display: none;
+    }
+  }
+
+  .alert-danger {
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: rgba(216, 59, 1, 0.08);
+    font-size: 13px;
+    color: #b03000;
   }
 
   .login-btn {
-    background-color: #0066cc;
-    color: white;
-    border: none;
-    border-radius: 30px;
-    padding: 15px;
-    @include text(16px, M-SB, auto, $white-cl, null);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 46px;
+    border: 0;
+    border-radius: 8px;
+    background: $yellow-cl;
+    font-family: "Be-SB";
+    font-size: 14.5px;
+    color: $dark-cl;
     cursor: pointer;
-    transition: background-color 0.3s;
-    margin-top: 10px;
+    transition: background-color 0.2s;
+
+    &:hover:not(:disabled) {
+      background: #dc951c;
+    }
+
+    &:focus-visible {
+      outline: 2px solid $dark-cl;
+      outline-offset: 2px;
+    }
+
+    &:disabled {
+      cursor: wait;
+      opacity: 0.75;
+    }
   }
 
-  .login-btn:hover {
-    background-color: #0055b3;
-  }
+  @media (max-width: 767px) {
+    .login-shell {
+      grid-template-columns: 1fr;
+    }
 
-  .forgot-password {
-    text-align: center;
-    margin-top: 20px;
-  }
+    // The photo would push the form below the fold on a phone
+    .login-art {
+      display: none;
+    }
 
-  .forgot-password a {
-    @include text(14px, M-SB, auto, $black-cl, null);
-    text-decoration: none;
-    transition: all 0.3s ease;
-  }
+    .login-panel {
+      align-content: start;
+      padding: 56px 20px 32px;
+    }
 
-  .forgot-password a:hover {
-    color: #0066cc;
-    transition: all 0.3s ease;
-  }
-}
-
-@media (max-width: 768px) {
-  .login-container {
-    flex-direction: column;
-    height: auto;
-  }
-
-  .left-panel,
-  .right-panel {
-    width: 100%;
-    padding: 40px 20px;
-  }
-
-  .left-panel {
-    padding-bottom: 100px;
+    .login-box__logo {
+      display: block;
+    }
   }
 }

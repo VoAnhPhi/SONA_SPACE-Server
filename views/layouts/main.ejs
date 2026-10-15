@@ -1,13 +1,9 @@
 <!DOCTYPE html>
-<html>
+<html lang="vi">
   <head>
-    <title>Furniture - Login</title>
+    <title>Đăng nhập - SONA Admin</title>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
     <link rel="stylesheet" href="/scss/style.css" />
     <link rel="stylesheet" href="/fonts/stylesheet.css" />
     <link
@@ -16,53 +12,63 @@
     />
   </head>
 
-  <body>
-    <div class="container-fluid">
-      <div class="left-panel">
-        <h1 class="brand-name">FURNITURE - SONA SPACE</h1>
-        <p class="brand-slogan">Quản lý Dashboard</p>
-        <div class="wave-bg"></div>
-      </div>
-      <div class="right-panel">
-        <div class="welcome-text">
-          <h2>Đăng nhập quản trị</h2>
-          <p>Vui lòng đăng nhập để truy cập vào trang quản trị</p>
+  <body class="login-page">
+    <main class="login-shell">
+      <!-- Interior photo with the brand (concept L1) -->
+      <section class="login-art" aria-hidden="true">
+        <img class="login-art__photo" src="/images/login-hero.jpg" alt="" width="1122" height="1402" />
+        <div class="login-art__caption">
+          <img class="login-art__logo" src="/images/logo-light@3x.png" alt="" width="120" height="33" />
+          <p>Trang quản trị nội thất SONA SPACE</p>
         </div>
-        <form class="login-form" id="adminLoginForm" novalidate>
-          <div class="form-group">
-            <div class="input-wrapper">
-              <input
-                type="email"
-                id="email"
-                name="email"
-                class="form-control"
-                placeholder="Email Address"
-                required
-              />
-              <div class="error-message" id="email-error"></div>
-            </div>
+      </section>
+
+      <section class="login-panel" aria-labelledby="login-title">
+        <div class="login-box">
+          <img class="login-box__logo" src="/images/logo-dark@3x.png" alt="SONA SPACE" width="100" height="27" />
+          <div class="welcome-text">
+            <h1 id="login-title">Đăng nhập quản trị</h1>
+            <p>Dùng tài khoản quản trị viên hoặc nhân viên.</p>
           </div>
-          <div class="form-group">
-            <div class="input-wrapper">
-              <input
-                type="password"
-                id="password"
-                name="password"
-                class="form-control"
-                placeholder="Password"
-                required
-              />
-              <span class="password-toggle" id="togglePassword">
-                <i class="far fa-eye"></i>
-              </span>
-              <div class="error-message" id="password-error"></div>
+          <form class="login-form" id="adminLoginForm" novalidate>
+            <div class="form-group">
+              <label for="email">Email</label>
+              <div class="input-wrapper">
+                <input
+                  type="email"
+                  id="email"
+                  name="email"
+                  class="form-control"
+                  placeholder="ten@sonaspace.com"
+                  autocomplete="username"
+                  required
+                />
+              </div>
+              <div class="error-message" id="email-error" role="alert"></div>
             </div>
-          </div>
-          <div class="alert alert-danger d-none" id="login-error"></div>
-          <button type="submit" class="login-btn">Đăng nhập</button>
-        </form>
-      </div>
-    </div>
+            <div class="form-group">
+              <label for="password">Mật khẩu</label>
+              <div class="input-wrapper">
+                <input
+                  type="password"
+                  id="password"
+                  name="password"
+                  class="form-control"
+                  autocomplete="current-password"
+                  required
+                />
+                <button type="button" class="password-toggle" id="togglePassword" aria-label="Hiện mật khẩu">
+                  <i class="far fa-eye" aria-hidden="true"></i>
+                </button>
+              </div>
+              <div class="error-message" id="password-error" role="alert"></div>
+            </div>
+            <div class="alert alert-danger d-none" id="login-error" role="alert"></div>
+            <button type="submit" class="login-btn">Đăng nhập</button>
+          </form>
+        </div>
+      </section>
+    </main>
 
     <script>
       document.addEventListener("DOMContentLoaded", function () {
@@ -86,6 +92,7 @@
             // Toggle icon
             this.querySelector("i").classList.toggle("fa-eye");
             this.querySelector("i").classList.toggle("fa-eye-slash");
+            this.setAttribute("aria-label", type === "password" ? "Hiện mật khẩu" : "Ẩn mật khẩu");
           });
         }
 

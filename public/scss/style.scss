@@ -38,3 +38,6 @@
 @import "imports/pages/addBanner";
 @import "imports/pages/comment";
 @import "imports/pages/contextChatBot";
+
+/* Shared admin kit: last, so it sets one look over the page styles */
+@import "imports/core/adminKit";

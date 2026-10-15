@@ -19,7 +19,8 @@
 		"upload:recovered-products": "node ./scripts/upload-recovered-product-images-to-cloudinary.js",
 		"apply:cloudinary-product-images": "node ./scripts/apply-cloudinary-product-image-manifest.js",
 		"upload:all-local-product-images": "node ./scripts/upload-all-local-product-images-to-cloudinary.js",
-		"apply:all-local-product-images": "node ./scripts/apply-local-all-cloudinary-product-images.js"
+		"apply:all-local-product-images": "node ./scripts/apply-local-all-cloudinary-product-images.js",
+		"build:css": "sass --silence-deprecation=import,global-builtin,color-functions public/scss/style.scss public/scss/style.css"
 	},
 	"dependencies": {
 		"@google/genai": "^1.15.0",
@@ -56,6 +57,7 @@
 	},
 	"devDependencies": {
 		"nodemon": "^3.1.10",
+		"sass": "^1.89.1",
 		"socket.io-client": "^4.8.1"
 	}
 }

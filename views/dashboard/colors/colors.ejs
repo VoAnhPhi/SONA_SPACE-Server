@@ -1,6 +1,6 @@
 <!-- Tiêu đề và Thanh công cụ -->
 <div class="dashboard-header-row">
-    <h2 class="dashboard-title">Màu sắc</h2>
+    <h1 class="dashboard-title">Màu sắc</h1>
     <div class="action-buttons">
         <button class="add-category-btn" onclick="window.location.href='/dashboard/colors/add'">
             <i class="fas fa-plus"></i> Thêm màu
@@ -196,13 +196,15 @@
         document.getElementById("searchInput").addEventListener("keyup", function () {
             filterColors();
         });
-        document.getElementById("statusFilter").addEventListener("change", function () {
-            filterColors();
-        });
+        // There is no status <select> on this page; status filtering happens in the column menu
+        const statusFilter = document.getElementById("statusFilter");
+        if (statusFilter) {
+            statusFilter.addEventListener("change", filterColors);
+        }
 
         function filterColors() {
             const searchTerm = document.getElementById("searchInput").value.toLowerCase();
-            const statusValue = document.getElementById("statusFilter").value;
+            const statusValue = statusFilter ? statusFilter.value : "all";
             let filtered = allColors.filter(color => {
                 const nameMatch = color.color_name.toLowerCase().includes(searchTerm);
                 let statusMatch = true;

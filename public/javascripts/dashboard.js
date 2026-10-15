@@ -1,8 +1,37 @@
 // Dashboard JavaScript
 
+// Track in-flight fetches so empty tables can say "no data" only after loading has finished
+// (an empty <tbody> during loading looks the same as an empty result). The layout loads
+// this file after the page scripts, so their first requests may already be running; the
+// "loading" flag starts on and is cleared by the first idle check below.
+(function trackFetchActivity() {
+  if (!window.fetch || window.fetch.__tracked) return;
+  const originalFetch = window.fetch.bind(window);
+  let pending = 0;
+  const markIdle = () => {
+    if (pending === 0) document.documentElement.removeAttribute("data-loading");
+  };
+  const tracked = (...args) => {
+    pending += 1;
+    document.documentElement.setAttribute("data-loading", "");
+    return originalFetch(...args).finally(() => {
+      pending -= 1;
+      // Let the page render the response before deciding the table is empty
+      setTimeout(markIdle, 50);
+    });
+  };
+  tracked.__tracked = true;
+  window.fetch = tracked;
+  document.documentElement.setAttribute("data-loading", "");
+  window.addEventListener("load", () => setTimeout(markIdle, 300));
+})();
+
 document.addEventListener("DOMContentLoaded", function () {
   // Set active navigation based on current page
   setActiveNavigation();
+  setupSidebarDrawer();
+  setupStackedTables();
+  setupBrokenImageFallback();
 
   // Initialize tooltips if Bootstrap is available
   if (typeof bootstrap !== "undefined") {
@@ -23,22 +52,146 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 });
 
-// Set active navigation based on current URL
-function setActiveNavigation() {
-  const currentPath = window.location.pathname;
-  const navLinks = document.querySelectorAll(".nav-item a");
+// Routes whose path does not start with their menu item's href
+const NAV_ALIASES = [
+  [/^\/dashboard\/(addcategories|editcategories)(\/|$)/, "/dashboard/categories"],
+  [/^\/dashboard\/(addroom|editroom)(\/|$)/, "/dashboard/room"],
+  [/^\/dashboard\/notifications\//, "/dashboard/typeNotify"],
+];
 
-  navLinks.forEach((link) => {
-    if (
-      currentPath === link.getAttribute("href") ||
-      (link.getAttribute("href") !== "/dashboard" &&
-        currentPath.startsWith(link.getAttribute("href")))
-    ) {
-      link.parentElement.classList.add("active");
+// Last path segment -> what the page does, for the breadcrumb and the tab title
+function pageAction(path) {
+  if (/\/(add|add[a-z]+)(\/|$)/i.test(path)) return "Thêm mới";
+  if (/\/(edit|edit[a-z]+)(\/|$)/i.test(path)) return "Chỉnh sửa";
+  if (/\/invoice\//.test(path)) return "Hóa đơn";
+  if (/\/(view|detail)\//.test(path) || /^\/dashboard\/contact-forms-design\/.+/.test(path)) return "Chi tiết";
+  return "";
+}
+
+// Highlight the menu item for the current page, then build the breadcrumb from it
+function setActiveNavigation() {
+  const currentPath = window.location.pathname.replace(/\/$/, "") || "/dashboard";
+  const alias = NAV_ALIASES.find(([pattern]) => pattern.test(currentPath));
+  const matchPath = alias ? alias[1] : currentPath;
+  let activeLink = null;
+
+  document.querySelectorAll(".nav-item a").forEach((link) => {
+    const href = link.getAttribute("href");
+    const isActive =
+      matchPath === href || (href !== "/dashboard" && matchPath.startsWith(href + "/"));
+    link.parentElement.classList.toggle("active", isActive);
+    if (isActive) {
+      link.setAttribute("aria-current", "page");
+      activeLink = link;
     } else {
-      link.parentElement.classList.remove("active");
+      link.removeAttribute("aria-current");
     }
   });
+
+  const crumb = document.getElementById("page-crumb");
+  if (!crumb || !activeLink) return;
+  const section = activeLink.closest(".menu-section").querySelector(".menu-section-title").textContent.trim();
+  const page = activeLink.querySelector("span").textContent.trim();
+  const action = pageAction(currentPath);
+  // "Sản phẩm / Sản phẩm" says nothing twice; drop the group when it matches the page
+  const parts = [section === page ? "" : section, page, action].filter(Boolean);
+  crumb.replaceChildren(
+    ...parts.map((text, index) => {
+      const isLast = index === parts.length - 1;
+      if (isLast) {
+        const current = document.createElement("span");
+        current.className = "page-crumb__current";
+        current.textContent = text;
+        return current;
+      }
+      if (text === page) {
+        const link = document.createElement("a");
+        link.href = activeLink.getAttribute("href");
+        link.textContent = text;
+        return link;
+      }
+      const span = document.createElement("span");
+      span.textContent = text;
+      return span;
+    })
+  );
+  document.title = `${action ? `${action} - ` : ""}${page} - SONA Admin`;
+}
+
+// Below 992px the sidebar is a drawer opened from the header button
+function setupSidebarDrawer() {
+  const sidebar = document.getElementById("sidebar");
+  const toggle = document.getElementById("sidebar-toggle");
+  const closeButton = document.getElementById("sidebar-close");
+  const backdrop = document.getElementById("sidebar-backdrop");
+  if (!sidebar || !toggle) return;
+
+  const setOpen = (open) => {
+    document.body.classList.toggle("sidebar-open", open);
+    toggle.setAttribute("aria-expanded", String(open));
+    backdrop.hidden = !open;
+    if (open) closeButton.focus();
+  };
+  toggle.addEventListener("click", () => setOpen(true));
+  closeButton.addEventListener("click", () => {
+    setOpen(false);
+    toggle.focus();
+  });
+  backdrop.addEventListener("click", () => setOpen(false));
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && document.body.classList.contains("sidebar-open")) {
+      setOpen(false);
+      toggle.focus();
+    }
+  });
+}
+
+// On phones the list tables stack into one card per row (CSS in _adminKit.scss). Each cell
+// carries its column title in data-label; rows are re-rendered by the page scripts, so the
+// labels are refreshed whenever a table body changes.
+const STACKED_TABLES =
+  ".category-table, .room-table, .products-table, .product-table, .contact-form-table, .news-table, .orders-table";
+
+function labelTableCells(table) {
+  // Column headers may hold filter menus; only the header's own title is a label
+  const titles = Array.from(table.querySelectorAll("thead th")).map((th) => {
+    const copy = th.cloneNode(true);
+    copy.querySelectorAll(".filter-dropdown, .dropdown-menu, ul, select").forEach((node) => node.remove());
+    return copy.textContent.replace(/\s+/g, " ").trim();
+  });
+  table.querySelectorAll("tbody tr").forEach((row) => {
+    Array.from(row.children).forEach((cell, index) => {
+      const title = titles[index] || "";
+      if (cell.dataset.label !== title) cell.dataset.label = title;
+    });
+  });
+}
+
+function setupStackedTables() {
+  document.querySelectorAll(STACKED_TABLES).forEach((element) => {
+    // Some pages put the class on a wrapper (orders) rather than on the <table> itself
+    const table = element.tagName === "TABLE" ? element : element.querySelector("table");
+    if (!table) return;
+    labelTableCells(table);
+    const body = table.tBodies[0];
+    if (!body) return;
+    new MutationObserver(() => labelTableCells(table)).observe(body, { childList: true, subtree: true });
+  });
+}
+
+// Some stored image URLs no longer resolve (Cloudinary 404). Hide the broken-image glyph and its
+// alt text so the cell shows a neutral tile instead of overlapping text.
+function setupBrokenImageFallback() {
+  document.addEventListener(
+    "error",
+    (event) => {
+      const image = event.target;
+      if (image.tagName === "IMG" && image.closest(".content-container")) {
+        image.classList.add("is-broken");
+      }
+    },
+    true
+  );
 }
 
 // Handle data table sorting

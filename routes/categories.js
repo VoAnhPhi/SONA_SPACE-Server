@@ -1,6 +1,7 @@
 ﻿const express = require("express");
 const router = express.Router();
 const db = require("../config/database");
+const { withTransaction } = require("../db/transaction");
 const { verifyToken, isAdmin } = require("../middleware/auth");
 const cloudinary = require("cloudinary").v2;
 
@@ -360,56 +361,88 @@ router.delete("/:slug", verifyToken, isAdmin, async (req, res) => {
   if (!slug) return res.status(400).json({ message: "Slug is required" });
 
   try {
-    // Ki?m tra danh m?c t?n t?i
-    const { rows: categoryData } = await db.query(
-      "SELECT category_id, category_image, category_banner FROM category WHERE slug = $1",
-      [slug]
-    );
+    const result = await withTransaction(async (client) => {
+      const { rows: categoryData } = await client.query(
+        "SELECT category_id, category_image, category_banner FROM category WHERE slug = $1 FOR UPDATE",
+        [slug]
+      );
+      if (!categoryData.length) {
+        return { status: 404, body: { error: "Không tìm thấy danh mục" } };
+      }
+      const { category_id: categoryId, category_image, category_banner } = categoryData[0];
 
-    if (!categoryData.length) {
-      return res.status(404).json({ error: "Category not found" });
+      // Products and banners still pointing at the category must be moved first
+      const { rows: products } = await client.query(
+        "SELECT product_id FROM product WHERE category_id = $1",
+        [categoryId]
+      );
+      if (products.length > 0) {
+        return {
+          status: 409,
+          body: {
+            error: `Danh mục còn ${products.length} sản phẩm. Hãy chuyển hoặc xóa các sản phẩm này trước.`,
+            totalProducts: products.length,
+            productIds: products.map((p) => p.product_id).join(", "),
+          },
+        };
+      }
+      const { rows: banners } = await client.query(
+        "SELECT COUNT(*)::int AS total FROM banners WHERE category_id = $1",
+        [categoryId]
+      );
+      if (banners[0].total > 0) {
+        return {
+          status: 409,
+          body: { error: `Danh mục đang được dùng cho ${banners[0].total} banner. Hãy đổi hoặc xóa các banner đó trước.` },
+        };
+      }
+
+      // The category's own attribute definitions go with it, unless a product still stores a value for one
+      const { rows: usedValues } = await client.query(
+        `SELECT COUNT(*)::int AS total
+         FROM product_attribute_value pav
+         JOIN attributes a ON a.attribute_id = pav.attribute_id
+         WHERE a.category_id = $1`,
+        [categoryId]
+      );
+      if (usedValues[0].total > 0) {
+        return {
+          status: 409,
+          body: { error: "Thuộc tính của danh mục vẫn đang được sản phẩm sử dụng." },
+        };
+      }
+      await client.query("DELETE FROM attributes WHERE category_id = $1", [categoryId]);
+      await client.query("DELETE FROM category WHERE category_id = $1", [categoryId]);
+
+      return { status: 200, body: { message: "Category deleted successfully" }, images: [category_image, category_banner] };
+    });
+
+    // Images are removed only after the rows are gone; a failed delete must not cost the images
+    if (result.images) {
+      await Promise.all(result.images.map(deleteCategoryImageFromCloudinary));
     }
-
-    const categoryId = categoryData[0].category_id;
-    const { category_image, category_banner } = categoryData[0];
-
-    // Ki?m tra xem danh m?c có s?n ph?m nào không
-    const { rows: products } = await db.query(
-      "SELECT product_id FROM product WHERE category_id = $1 ",
-      [categoryId]
-    );
-
-    if (products.length > 0) {
-      const productIds = products.map((p) => p.product_id).join(", ");
-      return res.status(400).json({
-        error:
-          "Cannot delete category with products. Remove or reassign products first.",
-        totalProducts: products.length,
-        productIds: productIds,
-      });
-    }
-
-    const deleteFromCloudinary = async (url) => {
-      if (!url) return;
-      const publicId = url
-        .split("/")
-        .slice(7)
-        .join("/")
-        .replace(/\.(jpg|jpeg|png|webp)$/i, "");
-      await cloudinary.uploader.destroy(publicId);
-    };
-
-    await deleteFromCloudinary(category_image);
-    await deleteFromCloudinary(category_banner);
-
-    // Xóa danh m?c
-    await db.query("DELETE FROM category WHERE slug = $1", [slug]);
-
-    res.json({ message: "Category deleted successfully" });
+    return res.status(result.status).json(result.body);
   } catch (error) {
-    res.status(500).json({ error: "Failed to delete category" });
+    console.error("Error deleting category:", error);
+    return res.status(500).json({ error: "Không thể xóa danh mục. Vui lòng thử lại." });
   }
 });
+
+// "https://res.cloudinary.com/<cloud>/image/upload/v123/SonaSpace/Category/x.jpg" -> "SonaSpace/Category/x"
+async function deleteCategoryImageFromCloudinary(url) {
+  if (!url) return;
+  const publicId = url
+    .split("/")
+    .slice(7)
+    .join("/")
+    .replace(/\.(jpg|jpeg|png|webp)$/i, "");
+  try {
+    await cloudinary.uploader.destroy(publicId);
+  } catch (error) {
+    // The category is already deleted; an orphaned image is not worth failing the request
+    console.error("Error deleting category image from Cloudinary:", publicId, error.message);
+  }
+}
 
 /**
  * @route   GET /api/categories/:id/products

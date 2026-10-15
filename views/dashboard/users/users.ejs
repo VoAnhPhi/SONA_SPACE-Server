@@ -1,6 +1,6 @@
 <!-- Tiêu đề và Thanh công cụ -->
 <div class="dashboard-header-row">
-    <h2 class="dashboard-title">Quản lý người dùng</h2>
+    <h1 class="dashboard-title">Quản lý người dùng</h1>
     <!-- <div class="action-buttons">
         <button class="add-product-btn" onclick="window.location.href='/dashboard/products/add'">
             <i class="fas fa-plus"></i> Thêm người dùng
@@ -18,7 +18,7 @@
         <i class="far fa-calendar-alt"></i>
         <span>1/05/2025 - 31/5/2025</span>
     </div> -->
-    <div class="results-info">Hiển thị 1-6 trong tổng số 500</div>
+    <div class="results-info">Đang tải dữ liệu...</div>
 </div>
 
 <!-- Bảng Người dùng -->
@@ -305,6 +305,7 @@
 
         // Function to render the table with provided user data
         function renderUsersTable(usersToRender) {
+            document.querySelector(".results-info").textContent = `${usersToRender.length} người dùng`;
             const tbody = document.getElementById("usersTableBody");
             tbody.innerHTML = "";
 

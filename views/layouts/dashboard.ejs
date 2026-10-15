@@ -21,224 +21,176 @@
 
 <body>
   <div class="app-container">
-    <!-- Sidebar -->
-    <div class="sidebar">
+    <!-- Sidebar: a drawer below 992px, opened from the header menu button -->
+    <aside class="sidebar" id="sidebar" aria-label="Điều hướng quản trị">
       <div class="brand-container">
-        <div class="brand">sona space</div>
+        <a class="brand" href="/dashboard" aria-label="SONA SPACE - Tổng quan">
+          <img src="/images/logo-dark@3x.png" alt="SONA SPACE" width="92" height="25" />
+        </a>
+        <button type="button" class="sidebar-close" id="sidebar-close" aria-label="Đóng menu">
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
       </div>
-      <div class="sidebar-menu">
-        <!-- Quản lý -->
+      <nav class="sidebar-menu">
         <div class="menu-section">
-          <div class="menu-section-title">Quản lý</div>
+          <div class="menu-section-title">Bán hàng</div>
           <ul class="nav-menu">
-            <li class="nav-item active">
+            <li class="nav-item">
               <a href="/dashboard">
-                <i class="fas fa-chart-line"></i>
+                <i class="fa-solid fa-chart-line" aria-hidden="true"></i>
                 <span>Tổng quan</span>
               </a>
             </li>
-
             <li class="nav-item">
               <a href="/dashboard/orders">
-                <i class="fas fa-shopping-bag"></i>
-                <span>Đơn hàng</span>
+                <i class="fa-solid fa-bag-shopping" aria-hidden="true"></i>
+                <span>Đơn hàng</span><b class="nav-count" id="nav-pending-count" hidden></b>
               </a>
             </li>
-          </ul>
-        </div>
-
-        <div class="menu-section">
-          <div class="menu-section-title">Liên hệ</div>
-          <ul class="nav-menu">
             <li class="nav-item">
               <a href="/dashboard/contact-forms-design">
-                <i class="fas fa-pencil-ruler"></i>
-                <span>Hỗ trợ thiết kế</span>
+                <i class="fa-solid fa-pen-ruler" aria-hidden="true"></i>
+                <span>Yêu cầu thiết kế</span>
               </a>
             </li>
-
-          </ul>
-        </div>
-        <div class="menu-section">
-          <div class="menu-section-title">Người dùng</div>
-          <ul class="nav-menu">
-            <!-- <li class="nav-item">
-                      <a href="/dashboard/accounts">
-                        <i class="fas fa-user-circle"></i>
-                        <span>Tài khoản</span>
-                      </a>
-                    </li>
-                    <li class="nav-item">
-                      <a href="/dashboard/staff">
-                        <i class="fas fa-users"></i>
-                        <span>Nhân viên</span>
-                      </a>
-                    </li> -->
             <li class="nav-item">
               <a href="/dashboard/users">
-                <i class="fas fa-users"></i>
+                <i class="fa-solid fa-user-group" aria-hidden="true"></i>
                 <span>Người dùng</span>
               </a>
             </li>
-          </ul>
-        </div>
-
-        <!-- Sản phẩm -->
-        <div class="menu-section">
-          <div class="menu-section-title">Sản phẩm</div>
-          <ul class="nav-menu">
-            <li class="nav-item">
-              <a href="/dashboard/products">
-                <i class="fas fa-box"></i>
-                <span>Sản phẩm</span>
-              </a>
-            </li>
-            <li class="nav-item">
-              <a href="/dashboard/colors">
-                <i class="fa-solid fa-palette"></i>
-                <span>Màu sắc</span>
-              </a>
-            </li>
-            <li class="nav-item">
-              <a href="/dashboard/material">
-
-                <i class="fas fa-layer-group"></i>
-
-                <span>Vật liệu</span>
-              </a>
-            </li>
-            <li class="nav-item">
-              <a href="/dashboard/categories">
-                <i class="fas fa-list"></i>
-                <span>Danh mục</span>
-              </a>
-            </li>
-            <li class="nav-item">
-              <a href="/dashboard/room">
-                <i class="fas fa-home"></i>
-                <span>Không gian</span>
-              </a>
-            </li>
-            <li class="nav-item">
-              <a href="/dashboard/comment">
-                <i class="fas fa-comments"></i>
-                <span>Bình luận</span>
-              </a>
-            </li>
-          </ul>
-        </div>
-
-        <div class="menu-section">
-          <div class="menu-section-title">Thông báo</div>
-          <ul class="nav-menu">
-            <li class="nav-item">
-              <a href="/dashboard/notify">
-                <i class="fa-solid fa-bell"></i>
-                <span>Thông báo</span>
-              </a>
-            </li>
-            <li class="nav-item">
-              <a href="/dashboard/typeNotify">
-                <i class="fa-solid fa-bell-concierge"></i>
-                <span>Kiểu thông báo</span>
-              </a>
-            </li>
-          </ul>
-        </div>
-
-        <div class="menu-section">
-          <div class="menu-section-title">Voucher</div>
-          <ul class="nav-menu">
             <li class="nav-item">
               <a href="/dashboard/voucher">
-                <i class="fa-solid fa-ticket"></i>
+                <i class="fa-solid fa-ticket" aria-hidden="true"></i>
                 <span>Voucher</span>
               </a>
             </li>
             <li class="nav-item">
               <a href="/dashboard/events">
-                <i class="fa-solid fa-calendar"></i>
+                <i class="fa-regular fa-calendar" aria-hidden="true"></i>
                 <span>Sự kiện</span>
               </a>
             </li>
           </ul>
         </div>
-
-        <!-- Tin tức -->
         <div class="menu-section">
-          <div class="menu-section-title">Tin tức</div>
+          <div class="menu-section-title">Sản phẩm</div>
           <ul class="nav-menu">
             <li class="nav-item">
+              <a href="/dashboard/products">
+                <i class="fa-solid fa-couch" aria-hidden="true"></i>
+                <span>Sản phẩm</span>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="/dashboard/categories">
+                <i class="fa-solid fa-table-list" aria-hidden="true"></i>
+                <span>Danh mục</span>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="/dashboard/room">
+                <i class="fa-solid fa-house" aria-hidden="true"></i>
+                <span>Không gian</span>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="/dashboard/colors">
+                <i class="fa-solid fa-palette" aria-hidden="true"></i>
+                <span>Màu sắc</span>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="/dashboard/material">
+                <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
+                <span>Vật liệu</span>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="/dashboard/comment">
+                <i class="fa-regular fa-comments" aria-hidden="true"></i>
+                <span>Bình luận</span>
+              </a>
+            </li>
+          </ul>
+        </div>
+        <div class="menu-section">
+          <div class="menu-section-title">Nội dung</div>
+          <ul class="nav-menu">
+            <li class="nav-item">
+              <a href="/dashboard/banners">
+                <i class="fa-regular fa-images" aria-hidden="true"></i>
+                <span>Banner</span>
+              </a>
+            </li>
+            <li class="nav-item">
               <a href="/dashboard/news">
-                <i class="fas fa-newspaper"></i>
+                <i class="fa-regular fa-newspaper" aria-hidden="true"></i>
                 <span>Tin tức</span>
               </a>
             </li>
             <li class="nav-item">
               <a href="/dashboard/Categorynews">
-                <i class="fas fa-folder"></i>
+                <i class="fa-regular fa-folder" aria-hidden="true"></i>
                 <span>Danh mục tin</span>
               </a>
             </li>
-          </ul>
-        </div>
-        <!-- Banner -->
-        <div class="menu-section">
-          <div class="menu-section-title">Banner</div>
-          <ul class="nav-menu">
             <li class="nav-item">
-              <a href="/dashboard/banners">
-                <i class="fas fa-list"></i>
-                <span>Banner</span>
+              <a href="/dashboard/notify">
+                <i class="fa-regular fa-bell" aria-hidden="true"></i>
+                <span>Thông báo</span>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="/dashboard/typeNotify">
+                <i class="fa-solid fa-bell-concierge" aria-hidden="true"></i>
+                <span>Kiểu thông báo</span>
               </a>
             </li>
           </ul>
         </div>
-
-        <!-- Chat bot -->
         <div class="menu-section">
-          <div class="menu-section-title">Chat bot</div>
+          <div class="menu-section-title">Hệ thống</div>
           <ul class="nav-menu">
             <li class="nav-item">
               <a href="/dashboard/chatbot">
-                <i class="fas fa-robot"></i>
-                <span>Chat bot</span>
+                <i class="fa-solid fa-robot" aria-hidden="true"></i>
+                <span>Chatbot</span>
               </a>
             </li>
           </ul>
         </div>
-
+      </nav>
+      <div class="sidebar-user">
+        <button type="button" class="user-profile" id="user-profile" aria-haspopup="menu" aria-expanded="false">
+          <span class="avatar" id="user-avatar" aria-hidden="true"></span>
+          <span class="user-info">
+            <span class="user-name">Quản trị viên</span>
+            <span class="user-role"></span>
+          </span>
+          <i class="fa-solid fa-chevron-up dropdown-arrow" aria-hidden="true"></i>
+        </button>
+        <ul class="user-menu" id="user-menu" role="menu" hidden>
+          <li role="none"><a role="menuitem" href="/dashboard/profile"><i class="fa-regular fa-circle-user" aria-hidden="true"></i>Hồ sơ</a></li>
+          <li role="none"><a role="menuitem" href="#" id="logout-btn"><i class="fa-solid fa-arrow-right-from-bracket" aria-hidden="true"></i>Đăng xuất</a></li>
+        </ul>
       </div>
-
-      <!-- Main Content -->
-
-    </div>
+    </aside>
+    <div class="sidebar-backdrop" id="sidebar-backdrop" hidden></div>
     <div class="main-content">
-      <!-- Header -->
       <header class="dashboard-header">
         <div class="header-left">
-          <div class="page-tabs">
-            <i class="fas fa-table-columns"></i>
-            <span>Dashboards</span>
-          </div>
-          <div class="current-tab">Default</div>
+          <button type="button" class="sidebar-toggle" id="sidebar-toggle" aria-label="Mở menu" aria-controls="sidebar" aria-expanded="false">
+            <i class="fa-solid fa-bars" aria-hidden="true"></i>
+          </button>
+          <nav class="page-crumb" id="page-crumb" aria-label="Vị trí trang"></nav>
         </div>
         <div class="header-right">
-          <div class="theme-toggle">
-            <i class="fas fa-sun"></i>
-          </div>
-          <div class="history-button">
-            <i class="fas fa-clock-rotate-left"></i>
-          </div>
           <div class="notifications dropdown">
-            <i class="fas fa-bell" id="notification-toggle">
-              <span id="notification-count" class="position-absolute translate-middle rounded-pill"
-                style="top: 17%; left: 83%;">
-                0
-              </span>
-
-            </i>
-
+            <button type="button" class="notifications-toggle" id="notification-toggle" aria-label="Thông báo đơn hàng hôm nay">
+              <i class="fa-regular fa-bell" aria-hidden="true"></i>
+              <span id="notification-count" class="notification-count" style="display: none">0</span>
+            </button>
             <div id="notification-dropdown" class="dropdown-menu notifications-dropdown">
               <div class="dropdown-header">Thông báo</div>
               <div class="notification-list" id="notification-list">
@@ -249,23 +201,9 @@
               </div>
             </div>
           </div>
-
-          <div class="user-profile">
-            <div class="avatar">
-              <img src="https://randomuser.me/api/portraits/men/32.jpg" alt="User Avatar" />
-            </div>
-            <div class="user-info">
-              <div class="user-name">Thomas Annee</div>
-              <div class="user-role">UX Designer</div>
-            </div>
-            <div class="dropdown-arrow">
-              <i class="fas fa-chevron-down"></i>
-            </div>
-          </div>
         </div>
       </header>
 
-      <!-- Content Container -->
       <div class="content-container"><%- body %></div>
     </div>
     <!-- Bootstrap JS Bundle with Popper -->
@@ -288,90 +226,64 @@
             return;
           }
 
-          // Cập nhật thông tin người dùng trên header
-          const userNameElement = document.querySelector(".user-name");
-          const userRoleElement = document.querySelector(".user-role");
+          // Show the signed-in user in the sidebar footer
+          const roleMap = { admin: "Quản trị viên", staff: "Nhân viên" };
+          const displayName = user.full_name || roleMap[user.role] || "Tài khoản";
+          document.querySelector(".user-name").textContent = displayName;
+          document.querySelector(".user-role").textContent = roleMap[user.role] || user.role;
+          // Initials instead of a third-party stock photo
+          document.getElementById("user-avatar").textContent = displayName
+            .split(/\s+/)
+            .filter(Boolean)
+            .slice(-2)
+            .map((word) => word[0].toUpperCase())
+            .join("");
 
-          if (userNameElement && user.full_name) {
-            userNameElement.textContent = user.full_name;
-          }
-          const roleMap = {
-            admin: 'Quản trị viên',
-            staff: 'Nhân viên',
+          // Account menu (profile, sign out) opens upward from the sidebar footer
+          const userProfile = document.getElementById("user-profile");
+          const userMenu = document.getElementById("user-menu");
+          const setUserMenu = (open) => {
+            userMenu.hidden = !open;
+            userProfile.setAttribute("aria-expanded", String(open));
           };
-          userRoleElement.textContent = roleMap[user.role] || user.role;
+          userProfile.addEventListener("click", () => setUserMenu(userMenu.hidden));
+          document.addEventListener("click", (event) => {
+            if (!userProfile.contains(event.target) && !userMenu.contains(event.target)) setUserMenu(false);
+          });
+          document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") setUserMenu(false);
+          });
 
-          // Thêm nút đăng xuất
-          const userProfile = document.querySelector(".user-profile");
-          if (userProfile) {
-            userProfile.addEventListener("click", function () {
-              const dropdown = document.createElement("div");
-              dropdown.className = "user-dropdown";
-              dropdown.innerHTML = `
-          <ul>
-            <li><a href="/dashboard/profile"><i class="fas fa-user-circle"></i> Hồ sơ</a></li>
-            <li><a href="#" id="logout-btn"><i class="fas fa-sign-out-alt"></i> Đăng xuất</a></li>
-          </ul>
-        `;
+          document.getElementById("logout-btn").addEventListener("click", async (event) => {
+            event.preventDefault();
+            try {
+              // Revoke the token server-side before clearing it locally
+              await fetch("/api/auth/logout", {
+                method: "POST",
+                headers: { Authorization: `Bearer ${token}` },
+              });
+            } catch (error) {
+              console.error("Logout error:", error);
+            } finally {
+              localStorage.removeItem("token");
+              localStorage.removeItem("user");
+              window.location.href = "/";
+            }
+          });
 
-              // Xóa dropdown cũ nếu có
-              const existingDropdown = document.querySelector(".user-dropdown");
-              if (existingDropdown) {
-                existingDropdown.remove();
-              } else {
-                document.body.appendChild(dropdown);
-
-                // Vị trí dropdown
-                const rect = userProfile.getBoundingClientRect();
-                dropdown.style.position = "absolute";
-                dropdown.style.top = rect.bottom + "px";
-                dropdown.style.right = window.innerWidth - rect.right + "px";
-
-                // Xử lý đăng xuất
-                document
-                  .getElementById("logout-btn")
-                  .addEventListener("click", async function (e) {
-                    e.preventDefault();
-
-                    try {
-                      // Gọi API đăng xuất để xóa token khỏi database
-                      const response = await fetch("/api/auth/logout", {
-                        method: "POST",
-                        headers: {
-                          Authorization: `Bearer ${token}`,
-                        },
-                      });
-
-                      if (response.ok) {
-                        console.log("Logout successful");
-                      } else {
-                        console.log("Logout failed");
-                      }
-                    } catch (error) {
-                      console.error("Logout error:", error);
-                    } finally {
-                      // Xóa token và thông tin người dùng khỏi localStorage
-                      localStorage.removeItem("token");
-                      localStorage.removeItem("user");
-
-                      // Chuyển hướng về trang đăng nhập
-                      window.location.href = "/";
-                    }
-                  });
-
-                // Đóng dropdown khi click ra ngoài
-                document.addEventListener("click", function closeDropdown(e) {
-                  if (
-                    !userProfile.contains(e.target) &&
-                    !dropdown.contains(e.target)
-                  ) {
-                    dropdown.remove();
-                    document.removeEventListener("click", closeDropdown);
-                  }
-                });
+          // Pending orders next to "Đơn hàng"; staff accounts may not reach this admin-only endpoint
+          fetch("/api/orders/status/count", { headers: { Authorization: `Bearer ${token}` } })
+            .then((response) => (response.ok ? response.json() : []))
+            .then((statuses) => {
+              const pending = (statuses || []).find((item) => item.status === "PENDING");
+              const badge = document.getElementById("nav-pending-count");
+              if (pending && pending.count > 0) {
+                badge.textContent = pending.count;
+                badge.title = `${pending.count} đơn chờ xác nhận`;
+                badge.hidden = false;
               }
-            });
-          }
+            })
+            .catch(() => {});
         });
       </script>
       <script>
@@ -449,10 +361,12 @@
                       item.innerHTML = `
             <div class="icon"><i class="fas fa-bell"></i></div>
             <div class="content">
-              <div class="title">${noti.message}</div>
+              <div class="title"></div>
               <div class="time">${formatTimeAgo(noti.created_at)}</div>
             </div>
           `;
+                      // The message is stored text; never parse it as markup
+                      item.querySelector(".title").textContent = noti.message;
                       listContainer.appendChild(item);
                     });
                   } else {
@@ -487,133 +401,6 @@
         });
 
       </script>
-      <style>
-        .user-dropdown {
-          background: white;
-          box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
-          border-radius: 5px;
-          z-index: 1000;
-          min-width: 200px;
-        }
-
-        .user-dropdown ul {
-          list-style: none;
-          padding: 0;
-          margin: 0;
-        }
-
-        .user-dropdown ul li {
-          padding: 0;
-        }
-
-        .user-dropdown ul li a {
-          padding: 10px 15px;
-          display: block;
-          color: #333;
-          text-decoration: none;
-          transition: background-color 0.2s;
-        }
-
-        .user-dropdown ul li a:hover {
-          background-color: #f5f5f5;
-        }
-
-        .user-dropdown ul li a i {
-          margin-right: 10px;
-          width: 16px;
-          text-align: center;
-        }
-
-        .notifications {
-          position: relative;
-          cursor: pointer;
-        }
-
-        .notifications-dropdown {
-          position: absolute;
-          right: 0;
-          top: 40px;
-          width: 350px;
-          background-color: #fff;
-          border-radius: 8px;
-          box-shadow: 0 0 12px rgba(0, 0, 0, 0.15);
-          display: none;
-          z-index: 999;
-          max-height: 500px;
-          overflow-y: auto;
-          padding: 0;
-        }
-
-        .notifications-dropdown.show {
-          display: block;
-        }
-
-        .notifications-dropdown .dropdown-header {
-          padding: 12px 16px;
-          font-family: "Be-B";
-          font-size: 20px;
-          border-bottom: 1px solid #eee;
-        }
-
-        .notification-list {
-          max-height: 400px;
-          overflow-y: auto;
-        }
-
-        .notification-item {
-          display: flex;
-          align-items: center;
-          padding: 12px 16px;
-          border-bottom: 1px solid #f0f0f0;
-          transition: background-color 0.2s;
-        }
-
-        .notification-item:hover {
-          background-color: #f8f8f8;
-        }
-
-        .notification-item .icon {
-          margin-right: 12px;
-          color: #f0a00a;
-          font-size: 18px;
-        }
-
-        .notification-item .content {
-          flex: 1;
-        }
-
-        .notification-item .content .title {
-          font-size: 14px;
-          font-family: "Be-R";
-        }
-
-        .notification-item .content .time {
-          font-size: 12px;
-          color: gray;
-          margin-top: 2px;
-          font-family: "Be-R";
-        }
-
-        .dropdown-footer {
-          padding: 10px 16px;
-          text-align: center;
-          border-top: 1px solid #eee;
-        }
-
-        .dropdown-footer a {
-          text-decoration: none;
-          color: #f0a00a;
-          font-family: "Be-M";
-        }
-
-        #notification-count {
-          font-size: 8px;
-          padding: 4px 5px;
-          background-color: #f0a00a;
-          color: white;
-          /* display: none; */
-        }
-      </style>
 </body>
 
 </html>
