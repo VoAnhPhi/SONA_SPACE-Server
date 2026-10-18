@@ -17,7 +17,7 @@ const mounts = [
   { path: "/api/rooms", router: require("./rooms/rooms.routes") },
   { path: "/api/news", router: require("./news/news.routes") },
   { path: "/api/news-categories", router: require("./news/news-categories.routes") },
-  { path: "/api/contact-form-design", router: require("../../routes/contactFormsDesign") },
+  { path: "/api/contact-form-design", router: require("./contact/design-forms.routes") },
   { path: "/api/comments", router: require("./comments/comments.routes") },
   { path: "/api/debug", router: require("../../routes/debug"), enabled: !config.isProduction },
   { path: "/api/orders-id", router: require("../../routes/orders-id") },
@@ -45,7 +45,7 @@ const mounts = [
   { path: "/api/attribute", router: require("./categories/attributes.routes") },
   { path: "/api/events", router: require("./events/events.routes") },
   { path: "/api/chat", router: require("../../routes/chat") },
-  { path: "/api/contact-forms", router: require("../../routes/contactForms") },
+  { path: "/api/contact-forms", router: require("./contact/contact.routes") },
 ];
 
 function mountModules(app) {

@@ -1,34 +1,20 @@
-const express = require("express");
-const router = express.Router();
-const db = require("../src/config/database");
-const { verifyToken, isAdmin } = require("../src/shared/middleware/auth");
-const { sendEmail } = require("../src/shared/mail/design-contact.mail");
+"use strict";
 
-const isStaffRole = (req) => req.user?.role?.toLowerCase?.() === "staff";
+const db = require("../../config/database");
+const HttpError = require("../../shared/http/http-error");
+const guard = require("../../shared/http/guard");
+const { sendEmail } = require("../../shared/mail/design-contact.mail");
+const { EMAIL_REGEX } = require("./contact.service");
+const {
+  STATUS_CODE_TO_LABEL,
+  STATUS_LABEL_TO_CODE,
+  VALID_STATUS_TRANSITIONS,
+} = require("./contact.constants");
 
-const STATUS_CODE_TO_LABEL = {
-  0: "NEW",
-  1: "PENDING",
-  2: "IN_PROGRESS",
-  3: "DEPOSIT",
-  4: "RESOLVED",
-  5: "REJECTED",
-};
+// Design consultation requests. Fields the table has no column for (budget, fees, remarks, ...)
+// travel as JSON inside the `note` column and are unpacked by parseCompatNote.
 
-const STATUS_LABEL_TO_CODE = Object.entries(STATUS_CODE_TO_LABEL).reduce(
-  (acc, [code, label]) => {
-    acc[label] = Number(code);
-    return acc;
-  },
-  {}
-);
-
-const VALID_STATUS_TRANSITIONS = {
-  NEW: ["PENDING", "IN_PROGRESS", "REJECTED"],
-  PENDING: ["IN_PROGRESS", "REJECTED"],
-  IN_PROGRESS: ["DEPOSIT", "REJECTED"],
-  DEPOSIT: ["RESOLVED", "REJECTED"],
-};
+const isStaffRole = (user) => user?.role?.toLowerCase?.() === "staff";
 
 function parsePositiveInt(value, fallback) {
   const parsed = Number.parseInt(value, 10);
@@ -39,6 +25,7 @@ function parsePositiveInt(value, fallback) {
   return fallback;
 }
 
+// Any integer passes; callers reject 0 through `!id`.
 function parseId(value) {
   const parsed = Number.parseInt(value, 10);
   return Number.isInteger(parsed) ? parsed : null;
@@ -118,10 +105,12 @@ function extractFirstImage(images) {
     return null;
   }
 
-  return String(images)
-    .split(",")
-    .map((image) => image.trim().replace(/^['"]+|['"]+$/g, ""))
-    .find(Boolean) || null;
+  return (
+    String(images)
+      .split(",")
+      .map((image) => image.trim().replace(/^['"]+|['"]+$/g, ""))
+      .find(Boolean) || null
+  );
 }
 
 function mapContactFormRow(row, extraFields = {}) {
@@ -245,13 +234,9 @@ async function findDetailByVariant(contactFormDesignId, variantId) {
   return null;
 }
 
-/**
- * @route   POST /api/contact-form-design
- * @desc    Gui form lien he thiet ke
- * @access  Public
- */
-router.post("/", async (req, res) => {
-  try {
+/** Public: a visitor requests a design consultation. Sends a confirmation mail without waiting for it. */
+function submit(body) {
+  return guard((error) => ({ success: false, error: error.message || "Gui yeu cau that bai" }), async () => {
     const {
       contact_form_design_id,
       name,
@@ -264,17 +249,14 @@ router.post("/", async (req, res) => {
       budget,
       different_information,
       design_fee,
-    } = req.body;
+    } = body;
 
     if (!name || !email || !design_description) {
-      return res
-        .status(400)
-        .json({ error: "Name, email, and design description are required" });
+      throw new HttpError(400, { error: "Name, email, and design description are required" });
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return res.status(400).json({ error: "Invalid email format" });
+    if (!EMAIL_REGEX.test(email)) {
+      throw new HttpError(400, { error: "Invalid email format" });
     }
 
     const activeStatusCodes = [
@@ -284,6 +266,7 @@ router.post("/", async (req, res) => {
       STATUS_LABEL_TO_CODE.DEPOSIT,
     ];
 
+    // The same person may not have two open requests within a day
     const { rows: duplicateRows } = await db.query(
       `
       SELECT contact_form_design_id
@@ -296,9 +279,7 @@ router.post("/", async (req, res) => {
     );
 
     if (duplicateRows.length > 0) {
-      return res
-        .status(400)
-        .json({ error: "Dang co form dang xu ly voi thong tin trung lap" });
+      throw new HttpError(400, { error: "Dang co form dang xu ly voi thong tin trung lap" });
     }
 
     const compatNote = serializeCompatNote({
@@ -341,16 +322,14 @@ router.post("/", async (req, res) => {
     ) {
       const customId = parseId(contact_form_design_id);
       if (!customId) {
-        return res.status(400).json({ error: "Invalid contact_form_design_id" });
+        throw new HttpError(400, { error: "Invalid contact_form_design_id" });
       }
 
       insertColumns.unshift("contact_form_design_id");
       insertValues.unshift(customId);
     }
 
-    const paramPlaceholders = insertValues
-      .map((_, index) => `$${index + 1}`)
-      .join(", ");
+    const paramPlaceholders = insertValues.map((_, index) => `$${index + 1}`).join(", ");
 
     const { rows: insertedRows } = await db.query(
       `
@@ -369,50 +348,39 @@ router.post("/", async (req, res) => {
     const created = await getContactFormById(insertedRows[0].contact_form_design_id);
     const mapped = mapContactFormRow(created);
 
-    Promise.resolve(
-      sendEmail(email, "Xac nhan Yeu cau Tu van Thiet ke", mapped)
-    ).catch(() => {});
+    Promise.resolve(sendEmail(email, "Xac nhan Yeu cau Tu van Thiet ke", mapped)).catch(() => {});
 
-    return res.status(200).json({
+    return {
       data: mapped,
       success: true,
       message: "Gui yeu cau thanh cong",
       contactId: insertedRows[0].contact_form_design_id,
-    });
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      error: error.message || "Gui yeu cau that bai",
-    });
-  }
-});
+    };
+  });
+}
 
-/**
- * @route   GET /api/contact-form-design
- * @desc    Lay danh sach cac form lien he
- * @access  Private (Admin only)
- */
-router.get("/", verifyToken, isAdmin, async (req, res) => {
-  try {
-    const page = parsePositiveInt(req.query.page, 1);
-    const limit = parsePositiveInt(req.query.limit, 10);
+/** Admin list; staff members only see the forms assigned to them. */
+function list(query, requester) {
+  return guard({ error: "Failed to fetch contact forms" }, async () => {
+    const page = parsePositiveInt(query.page, 1);
+    const limit = parsePositiveInt(query.limit, 10);
     const offset = (page - 1) * limit;
 
     const whereParts = [];
     const params = [];
 
-    if (req.query.status) {
-      const statusLabel = normalizeStatusLabel(req.query.status);
+    if (query.status) {
+      const statusLabel = normalizeStatusLabel(query.status);
       if (!statusLabel) {
-        return res.status(400).json({ error: "Trang thai khong hop le" });
+        throw new HttpError(400, { error: "Trang thai khong hop le" });
       }
 
       params.push(STATUS_LABEL_TO_CODE[statusLabel]);
       whereParts.push(`cfd.status = $${params.length}`);
     }
 
-    if (isStaffRole(req)) {
-      params.push(req.user.id);
+    if (isStaffRole(requester)) {
+      params.push(requester.id);
       whereParts.push(`cfd.user_id = $${params.length}`);
     }
 
@@ -444,7 +412,7 @@ router.get("/", verifyToken, isAdmin, async (req, res) => {
       listParams
     );
 
-    return res.json({
+    return {
       forms: forms.map((form) =>
         mapContactFormRow(form, { servicer_name: form.servicer_name || null })
       ),
@@ -454,55 +422,39 @@ router.get("/", verifyToken, isAdmin, async (req, res) => {
         totalForms,
         formsPerPage: limit,
       },
-    });
-  } catch (error) {
-    return res.status(500).json({ error: "Failed to fetch contact forms" });
-  }
-});
+    };
+  });
+}
 
-/**
- * @route   GET /api/contact-form-design/:id
- * @desc    Lay chi tiet mot form lien he
- * @access  Private (Admin only)
- */
-router.get("/:id", verifyToken, isAdmin, async (req, res) => {
-  try {
-    const id = parseId(req.params.id);
+function getById(rawId) {
+  return guard({ error: "Failed to fetch contact form" }, async () => {
+    const id = parseId(rawId);
     if (!id) {
-      return res.status(400).json({ error: "Invalid contact form ID" });
+      throw new HttpError(400, { error: "Invalid contact form ID" });
     }
 
     const form = await getContactFormById(id);
 
     if (!form) {
-      return res.status(404).json({ error: "Contact form not found" });
+      throw new HttpError(404, { error: "Contact form not found" });
     }
 
-    return res.json(
-      mapContactFormRow(form, {
-        staff_name: form.staff_name || null,
-      })
-    );
-  } catch (error) {
-    return res.status(500).json({ error: "Failed to fetch contact form" });
-  }
-});
+    return mapContactFormRow(form, {
+      staff_name: form.staff_name || null,
+    });
+  });
+}
 
-/**
- * @route   PUT /api/contact-form-design/:id
- * @desc    Cap nhat form lien he
- * @access  Private (Admin only)
- */
-router.put("/:id", verifyToken, isAdmin, async (req, res) => {
-  try {
-    const id = parseId(req.params.id);
+function update(rawId, body) {
+  return guard({ error: "Failed to update contact form" }, async () => {
+    const id = parseId(rawId);
     if (!id) {
-      return res.status(400).json({ error: "Invalid contact form ID" });
+      throw new HttpError(400, { error: "Invalid contact form ID" });
     }
 
     const existing = await getContactFormById(id);
     if (!existing) {
-      return res.status(404).json({ error: "Contact form not found" });
+      throw new HttpError(404, { error: "Contact form not found" });
     }
 
     const currentCompat = parseCompatNote(existing.note);
@@ -519,19 +471,19 @@ router.put("/:id", verifyToken, isAdmin, async (req, res) => {
     };
 
     for (const [inputKey, columnName] of Object.entries(fieldMappings)) {
-      if (req.body[inputKey] !== undefined) {
-        values.push(req.body[inputKey] || null);
+      if (body[inputKey] !== undefined) {
+        values.push(body[inputKey] || null);
         updates.push(`${columnName} = $${values.length}`);
       }
     }
 
-    if (req.body.user_id !== undefined) {
-      if (req.body.user_id === null || req.body.user_id === "") {
+    if (body.user_id !== undefined) {
+      if (body.user_id === null || body.user_id === "") {
         values.push(null);
       } else {
-        const assignedUserId = parseId(req.body.user_id);
+        const assignedUserId = parseId(body.user_id);
         if (!assignedUserId) {
-          return res.status(400).json({ error: "user_id khong hop le" });
+          throw new HttpError(400, { error: "user_id khong hop le" });
         }
         values.push(assignedUserId);
       }
@@ -539,31 +491,25 @@ router.put("/:id", verifyToken, isAdmin, async (req, res) => {
     }
 
     let nextStatusLabel = statusCodeToLabel(existing.status);
-    if (req.body.status !== undefined && req.body.status !== null && req.body.status !== "") {
-      const normalizedStatus = normalizeStatusLabel(req.body.status);
+    if (body.status !== undefined && body.status !== null && body.status !== "") {
+      const normalizedStatus = normalizeStatusLabel(body.status);
       if (!normalizedStatus) {
-        return res.status(400).json({ error: "Trang thai khong hop le" });
+        throw new HttpError(400, { error: "Trang thai khong hop le" });
       }
 
-      const allowedNextStatuses =
-        VALID_STATUS_TRANSITIONS[nextStatusLabel] || [];
+      const allowedNextStatuses = VALID_STATUS_TRANSITIONS[nextStatusLabel] || [];
 
       if (
         normalizedStatus === "IN_PROGRESS" &&
-        Number(req.body.user_id || existing.user_id || 0) === 0
+        Number(body.user_id || existing.user_id || 0) === 0
       ) {
-        return res.status(400).json({
+        throw new HttpError(400, {
           error: "Vui long chon nhan vien thuc hien truoc khi chuyen trang thai",
         });
       }
 
-      if (
-        normalizedStatus !== nextStatusLabel &&
-        !allowedNextStatuses.includes(normalizedStatus)
-      ) {
-        return res
-          .status(400)
-          .json({ error: "Trang thai khong duoc phep chuyen doi" });
+      if (normalizedStatus !== nextStatusLabel && !allowedNextStatuses.includes(normalizedStatus)) {
+        throw new HttpError(400, { error: "Trang thai khong duoc phep chuyen doi" });
       }
 
       nextStatusLabel = normalizedStatus;
@@ -571,40 +517,34 @@ router.put("/:id", verifyToken, isAdmin, async (req, res) => {
       updates.push(`status = $${values.length}`);
     }
 
-    const compatFields = [
-      "require_design",
-      "different_information",
-      "remarks",
-      "drive",
-      "note",
-    ];
+    const compatFields = ["require_design", "different_information", "remarks", "drive", "note"];
 
     for (const field of compatFields) {
-      if (req.body[field] !== undefined) {
-        currentCompat[field] = req.body[field] || null;
+      if (body[field] !== undefined) {
+        currentCompat[field] = body[field] || null;
       }
     }
 
     const numericCompatFields = ["budget", "design_fee", "design_deposits"];
     for (const field of numericCompatFields) {
-      if (req.body[field] !== undefined) {
-        const numericValue = toNullableNumber(req.body[field]);
+      if (body[field] !== undefined) {
+        const numericValue = toNullableNumber(body[field]);
         if (Number.isNaN(numericValue)) {
-          return res.status(400).json({ error: `${field} phai la so` });
+          throw new HttpError(400, { error: `${field} phai la so` });
         }
         currentCompat[field] = numericValue;
       }
     }
 
     if (
-      req.body.require_design !== undefined ||
-      req.body.different_information !== undefined ||
-      req.body.remarks !== undefined ||
-      req.body.drive !== undefined ||
-      req.body.note !== undefined ||
-      req.body.budget !== undefined ||
-      req.body.design_fee !== undefined ||
-      req.body.design_deposits !== undefined
+      body.require_design !== undefined ||
+      body.different_information !== undefined ||
+      body.remarks !== undefined ||
+      body.drive !== undefined ||
+      body.note !== undefined ||
+      body.budget !== undefined ||
+      body.design_fee !== undefined ||
+      body.design_deposits !== undefined
     ) {
       values.push(serializeCompatNote(currentCompat));
       updates.push(`note = $${values.length}`);
@@ -613,7 +553,7 @@ router.put("/:id", verifyToken, isAdmin, async (req, res) => {
     updates.push("updated_at = NOW()");
 
     if (updates.length === 1) {
-      return res.status(400).json({ error: "Khong co du lieu cap nhat" });
+      throw new HttpError(400, { error: "Khong co du lieu cap nhat" });
     }
 
     values.push(id);
@@ -625,27 +565,20 @@ router.put("/:id", verifyToken, isAdmin, async (req, res) => {
 
     const updated = await getContactFormById(id);
 
-    return res.json({
+    return {
       message: "Contact form updated successfully",
       form: mapContactFormRow(updated, {
         staff_name: updated?.staff_name || null,
       }),
-    });
-  } catch (error) {
-    return res.status(500).json({ error: "Failed to update contact form" });
-  }
-});
+    };
+  });
+}
 
-/**
- * @route   GET /api/contact-form-design/:id/details
- * @desc    Lay danh sach san pham trong chi tiet thiet ke
- * @access  Private (Admin only)
- */
-router.get("/:id/details", verifyToken, isAdmin, async (req, res) => {
-  try {
-    const contactFormDesignId = parseId(req.params.id);
+function listDetails(rawId) {
+  return guard({ error: "Failed to fetch design details" }, async () => {
+    const contactFormDesignId = parseId(rawId);
     if (!contactFormDesignId) {
-      return res.status(400).json({ error: "Invalid contact form ID" });
+      throw new HttpError(400, { error: "Invalid contact form ID" });
     }
 
     const { rows: details } = await db.query(
@@ -658,42 +591,36 @@ router.get("/:id/details", verifyToken, isAdmin, async (req, res) => {
       [contactFormDesignId]
     );
 
-    return res.json(details.map(mapDetailRow));
-  } catch (error) {
-    return res.status(500).json({ error: "Failed to fetch design details" });
-  }
-});
+    return details.map(mapDetailRow);
+  });
+}
 
-/**
- * @route   POST /api/contact-form-design/:id/details
- * @desc    Them san pham vao chi tiet thiet ke
- * @access  Private (Admin only)
- */
-router.post("/:id/details", verifyToken, isAdmin, async (req, res) => {
-  try {
-    const contactFormDesignId = parseId(req.params.id);
+/** Adds a product variant to the design; adding the same variant again increases its quantity. */
+function addDetail(rawId, body) {
+  return guard({ error: "Failed to add product variant to design" }, async () => {
+    const contactFormDesignId = parseId(rawId);
     if (!contactFormDesignId) {
-      return res.status(400).json({ error: "Invalid contact form ID" });
+      throw new HttpError(400, { error: "Invalid contact form ID" });
     }
 
-    const variantId = Number(req.body.variant_id);
-    const quantity = Number(req.body.quantity);
-    const unitPrice = Number(req.body.unit_price);
+    const variantId = Number(body.variant_id);
+    const quantity = Number(body.quantity);
+    const unitPrice = Number(body.unit_price);
 
     if (!variantId || !quantity || !unitPrice) {
-      return res.status(400).json({
+      throw new HttpError(400, {
         error: "variant_id, quantity, and unit_price are required and must be number",
       });
     }
 
     const form = await getContactFormById(contactFormDesignId);
     if (!form) {
-      return res.status(404).json({ error: "Contact form not found" });
+      throw new HttpError(404, { error: "Contact form not found" });
     }
 
     const variant = await getVariantMeta(variantId);
     if (!variant) {
-      return res.status(404).json({ error: "Variant not found" });
+      throw new HttpError(404, { error: "Variant not found" });
     }
 
     const existingDetail = await findDetailByVariant(contactFormDesignId, variantId);
@@ -738,13 +665,16 @@ router.post("/:id/details", verifyToken, isAdmin, async (req, res) => {
         ]
       );
 
-      return res.status(200).json({
-        message: "Da cap nhat so luong san pham trong form thiet ke.",
-        detailId: existingDetail.contact_form_design_detail_id,
-        variant_id: variantId,
-        quantity: nextQuantity,
-        total_price: nextTotalPrice,
-      });
+      return {
+        status: 200,
+        body: {
+          message: "Da cap nhat so luong san pham trong form thiet ke.",
+          detailId: existingDetail.contact_form_design_detail_id,
+          variant_id: variantId,
+          quantity: nextQuantity,
+          total_price: nextTotalPrice,
+        },
+      };
     }
 
     const { rows: insertedRows } = await db.query(
@@ -774,53 +704,45 @@ router.post("/:id/details", verifyToken, isAdmin, async (req, res) => {
       ]
     );
 
-    return res.status(201).json({
-      message: "Product variant added to design successfully",
-      detailId: insertedRows[0].contact_form_design_detail_id,
-      variant_id: variantId,
-      quantity,
-      total_price: quantity * unitPrice,
-    });
-  } catch (error) {
-    return res.status(500).json({ error: "Failed to add product variant to design" });
-  }
-});
+    return {
+      status: 201,
+      body: {
+        message: "Product variant added to design successfully",
+        detailId: insertedRows[0].contact_form_design_detail_id,
+        variant_id: variantId,
+        quantity,
+        total_price: quantity * unitPrice,
+      },
+    };
+  });
+}
 
-/**
- * @route   PUT /api/contact-form-design/:id/details/:variant_id
- * @desc    Cap nhat san pham trong chi tiet thiet ke
- * @access  Private (Admin only)
- */
-router.put("/:id/details/:variant_id", verifyToken, isAdmin, async (req, res) => {
-  try {
-    const contactFormDesignId = parseId(req.params.id);
-    const variantId = parseId(req.params.variant_id);
+function updateDetail(rawId, rawVariantId, body) {
+  return guard({ error: "Failed to update design detail" }, async () => {
+    const contactFormDesignId = parseId(rawId);
+    const variantId = parseId(rawVariantId);
 
     if (!contactFormDesignId || !variantId) {
-      return res.status(400).json({ error: "Invalid ID" });
+      throw new HttpError(400, { error: "Invalid ID" });
     }
 
     const existingDetail = await findDetailByVariant(contactFormDesignId, variantId);
     if (!existingDetail) {
-      return res.status(404).json({
+      throw new HttpError(404, {
         error: "Detail item not found or does not belong to this design",
       });
     }
 
     const currentCompat = parseCompatNote(existingDetail.note);
     const quantity =
-      req.body.quantity !== undefined
-        ? Number(req.body.quantity)
-        : Number(existingDetail.quantity);
+      body.quantity !== undefined ? Number(body.quantity) : Number(existingDetail.quantity);
     const unitPrice =
-      req.body.unit_price !== undefined
-        ? Number(req.body.unit_price)
+      body.unit_price !== undefined
+        ? Number(body.unit_price)
         : Number(currentCompat.unit_price || 0);
 
     if (quantity <= 0 || unitPrice <= 0) {
-      return res
-        .status(400)
-        .json({ error: "quantity and unit_price must be positive numbers" });
+      throw new HttpError(400, { error: "quantity and unit_price must be positive numbers" });
     }
 
     const nextCompat = {
@@ -842,7 +764,7 @@ router.put("/:id/details/:variant_id", verifyToken, isAdmin, async (req, res) =>
       [quantity, serializeCompatNote(nextCompat), existingDetail.contact_form_design_detail_id]
     );
 
-    return res.json({
+    return {
       message: "Design detail updated successfully",
       detail: {
         contact_form_design_id: contactFormDesignId,
@@ -851,31 +773,22 @@ router.put("/:id/details/:variant_id", verifyToken, isAdmin, async (req, res) =>
         unit_price: unitPrice,
         total_price: quantity * unitPrice,
       },
-    });
-  } catch (error) {
-    return res.status(500).json({ error: "Failed to update design detail" });
-  }
-});
+    };
+  });
+}
 
-/**
- * @route   DELETE /api/contact-form-design/:id/details/:variant_id
- * @desc    Xoa san pham khoi chi tiet thiet ke
- * @access  Private (Admin only)
- */
-router.delete("/:id/details/:variant_id", verifyToken, isAdmin, async (req, res) => {
-  try {
-    const contactFormDesignId = parseId(req.params.id);
-    const variantId = parseId(req.params.variant_id);
+function removeDetail(rawId, rawVariantId) {
+  return guard({ error: "Khong the xoa san pham khoi form thiet ke" }, async () => {
+    const contactFormDesignId = parseId(rawId);
+    const variantId = parseId(rawVariantId);
 
     if (!contactFormDesignId || !variantId) {
-      return res.status(400).json({ error: "Invalid ID" });
+      throw new HttpError(400, { error: "Invalid ID" });
     }
 
     const existingDetail = await findDetailByVariant(contactFormDesignId, variantId);
     if (!existingDetail) {
-      return res.status(404).json({
-        error: "San pham khong ton tai trong form thiet ke",
-      });
+      throw new HttpError(404, { error: "San pham khong ton tai trong form thiet ke" });
     }
 
     await db.query(
@@ -883,44 +796,37 @@ router.delete("/:id/details/:variant_id", verifyToken, isAdmin, async (req, res)
       [existingDetail.contact_form_design_detail_id]
     );
 
-    return res.json({ message: "San pham da duoc xoa khoi form thiet ke" });
-  } catch (error) {
-    return res
-      .status(500)
-      .json({ error: "Khong the xoa san pham khoi form thiet ke" });
-  }
-});
+    return { message: "San pham da duoc xoa khoi form thiet ke" };
+  });
+}
 
-/**
- * @route   DELETE /api/contact-form-design/:id
- * @desc    Xoa form lien he
- * @access  Private (Admin only)
- */
-router.delete("/:id", verifyToken, isAdmin, async (req, res) => {
-  try {
-    const id = parseId(req.params.id);
+function remove(rawId) {
+  return guard({ error: "Khong the xoa form lien he" }, async () => {
+    const id = parseId(rawId);
     if (!id) {
-      return res.status(400).json({ error: "ID contact form khong hop le" });
+      throw new HttpError(400, { error: "ID contact form khong hop le" });
     }
 
     const form = await getContactFormById(id);
     if (!form) {
-      return res.status(404).json({ error: "Form lien he khong ton tai" });
+      throw new HttpError(404, { error: "Form lien he khong ton tai" });
     }
 
-    await db.query(
-      "DELETE FROM contact_form_design_details WHERE contact_form_design_id = $1",
-      [id]
-    );
+    await db.query("DELETE FROM contact_form_design_details WHERE contact_form_design_id = $1", [id]);
+    await db.query("DELETE FROM contact_form_design WHERE contact_form_design_id = $1", [id]);
 
-    await db.query("DELETE FROM contact_form_design WHERE contact_form_design_id = $1", [
-      id,
-    ]);
+    return { message: "Form lien he da duoc xoa thanh cong" };
+  });
+}
 
-    return res.json({ message: "Form lien he da duoc xoa thanh cong" });
-  } catch (error) {
-    return res.status(500).json({ error: "Khong the xoa form lien he" });
-  }
-});
-
-module.exports = router;
+module.exports = {
+  submit,
+  list,
+  getById,
+  update,
+  listDetails,
+  addDetail,
+  updateDetail,
+  removeDetail,
+  remove,
+};
