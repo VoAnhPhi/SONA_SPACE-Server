@@ -1,7 +1,16 @@
-const express = require("express");
-const router = express.Router();
-const db = require("../src/config/database");
-const { verifyToken, isAdmin } = require("../src/shared/middleware/auth");
+"use strict";
+
+const db = require("../../config/database");
+const HttpError = require("../../shared/http/http-error");
+const guard = require("../../shared/http/guard");
+
+// Legacy 500 body of this endpoint family: { success: false, message }
+const failWith = (message) => () => ({ success: false, message });
+// Same, but a unique-violation becomes a 409 with its own message.
+const failWithConflict = (message, conflictMessage) => (error) =>
+  error.code === "23505"
+    ? new HttpError(409, { success: false, message: conflictMessage })
+    : { success: false, message };
 
 function materialStatusFromDeletedAt(deletedAt) {
   return deletedAt ? 0 : 1;
@@ -28,9 +37,9 @@ async function hasProductAttributeValueTable() {
   return Boolean(rows[0]?.table_name);
 }
 
-// GET tat ca vat lieu (chua bi xoa)
-router.get("/", async (req, res) => {
-  try {
+/** Materials that are not deleted, newest first. */
+function list() {
+  return guard(failWith("Loi may chu khi lay danh sach vat lieu."), async () => {
     const { rows } = await db.query(
       `
       SELECT material_id, material_name, material_description, slug, created_at, updated_at, deleted_at
@@ -39,21 +48,12 @@ router.get("/", async (req, res) => {
       ORDER BY created_at DESC
       `
     );
+    return rows.map(mapMaterialRow);
+  });
+}
 
-    return res.status(200).json(rows.map(mapMaterialRow));
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Loi may chu khi lay danh sach vat lieu.",
-    });
-  }
-});
-
-// GET chi tiet vat lieu theo slug
-router.get("/:slug", async (req, res) => {
-  const { slug } = req.params;
-
-  try {
+function getBySlug(slug) {
+  return guard(failWith("Loi may chu khi lay vat lieu."), async () => {
     const { rows } = await db.query(
       `
       SELECT material_id, material_name, material_description, slug, created_at, updated_at, deleted_at
@@ -65,104 +65,89 @@ router.get("/:slug", async (req, res) => {
     );
 
     if (rows.length === 0) {
-      return res.status(404).json({ success: false, message: "Vat lieu khong tim thay." });
+      throw new HttpError(404, { success: false, message: "Vat lieu khong tim thay." });
     }
 
-    return res.status(200).json({ success: true, material: mapMaterialRow(rows[0]) });
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Loi may chu khi lay vat lieu.",
-    });
-  }
-});
+    return { success: true, material: mapMaterialRow(rows[0]) };
+  });
+}
 
-// POST them moi vat lieu
-router.post("/", verifyToken, isAdmin, async (req, res) => {
+function create(body) {
   const {
     material_name,
     material_description = null,
     slug,
     material_priority = 1,
     material_status = 1,
-  } = req.body;
+  } = body;
 
   if (!material_name || !slug) {
-    return res.status(400).json({
+    throw new HttpError(400, {
       success: false,
       message: "Ten vat lieu va slug la bat buoc.",
     });
   }
 
-  try {
-    const { rows: insertedRows } = await db.query(
-      `
+  return guard(
+    failWithConflict("Loi may chu khi them vat lieu moi.", "Loai vat lieu nay da ton tai."),
+    async () => {
+      const { rows: insertedRows } = await db.query(
+        `
       INSERT INTO materials (material_name, material_description, slug, created_at, updated_at)
       VALUES ($1, $2, $3, NOW(), NOW())
       RETURNING material_id, material_name, material_description, slug, created_at, updated_at, deleted_at
       `,
-      [material_name, material_description, slug]
-    );
+        [material_name, material_description, slug]
+      );
 
-    return res.status(201).json({
-      success: true,
-      message: "Vat lieu da duoc them thanh cong.",
-      material: {
-        ...mapMaterialRow(insertedRows[0]),
-        material_priority,
-        material_status,
-      },
-    });
-  } catch (error) {
-    if (error.code === "23505") {
-      return res.status(409).json({
-        success: false,
-        message: "Loai vat lieu nay da ton tai.",
-      });
+      return {
+        success: true,
+        message: "Vat lieu da duoc them thanh cong.",
+        material: {
+          ...mapMaterialRow(insertedRows[0]),
+          material_priority,
+          material_status,
+        },
+      };
     }
+  );
+}
 
-    return res.status(500).json({
-      success: false,
-      message: "Loi may chu khi them vat lieu moi.",
-    });
-  }
-});
-
-// PUT cap nhat vat lieu
-router.put("/:slug", verifyToken, isAdmin, async (req, res) => {
-  const oldSlug = req.params.slug;
+function update(oldSlug, body) {
   const {
     material_name,
     material_description = null,
     slug: newSlug,
     material_priority,
     material_status,
-  } = req.body;
+  } = body;
 
   if (!material_name || !newSlug) {
-    return res.status(400).json({
+    throw new HttpError(400, {
       success: false,
       message: "Ten vat lieu va slug moi la bat buoc.",
     });
   }
 
-  try {
-    const { rows: targetRows } = await db.query(
-      "SELECT material_id FROM materials WHERE slug = $1 AND deleted_at IS NULL LIMIT 1",
-      [oldSlug]
-    );
+  return guard(
+    failWithConflict("Loi may chu khi cap nhat vat lieu.", "Slug moi da ton tai cho mot vat lieu khac."),
+    async () => {
+      const { rows: targetRows } = await db.query(
+        "SELECT material_id FROM materials WHERE slug = $1 AND deleted_at IS NULL LIMIT 1",
+        [oldSlug]
+      );
 
-    if (!targetRows.length) {
-      return res.status(404).json({
-        success: false,
-        message: "Vat lieu khong tim thay de cap nhat.",
-      });
-    }
+      if (!targetRows.length) {
+        throw new HttpError(404, {
+          success: false,
+          message: "Vat lieu khong tim thay de cap nhat.",
+        });
+      }
 
-    const materialId = targetRows[0].material_id;
+      const materialId = targetRows[0].material_id;
 
-    const { rowCount } = await db.query(
-      `
+      const { rowCount } = await db.query(
+        `
       UPDATE materials
       SET material_name = $1,
           material_description = $2,
@@ -171,50 +156,38 @@ router.put("/:slug", verifyToken, isAdmin, async (req, res) => {
           deleted_at = CASE WHEN $4::int = 0 THEN COALESCE(deleted_at, NOW()) ELSE NULL END
       WHERE material_id = $5
       `,
-      [
-        material_name,
-        material_description,
-        newSlug,
-        Number(material_status) === 0 ? 0 : 1,
-        materialId,
-      ]
-    );
+        [
+          material_name,
+          material_description,
+          newSlug,
+          Number(material_status) === 0 ? 0 : 1,
+          materialId,
+        ]
+      );
 
-    if (rowCount === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "Khong co thay doi hoac vat lieu khong ton tai.",
-      });
+      if (rowCount === 0) {
+        throw new HttpError(404, {
+          success: false,
+          message: "Khong co thay doi hoac vat lieu khong ton tai.",
+        });
+      }
+
+      return {
+        success: true,
+        message: "Vat lieu da duoc cap nhat thanh cong.",
+        material_priority,
+      };
     }
+  );
+}
 
-    return res.status(200).json({
-      success: true,
-      message: "Vat lieu da duoc cap nhat thanh cong.",
-      material_priority,
-    });
-  } catch (error) {
-    if (error.code === "23505") {
-      return res.status(409).json({
-        success: false,
-        message: "Slug moi da ton tai cho mot vat lieu khac.",
-      });
-    }
-
-    return res.status(500).json({
-      success: false,
-      message: "Loi may chu khi cap nhat vat lieu.",
-    });
-  }
-});
-
-// PUT toggle status (an/hien) vat lieu
-router.put("/:slug/toggle-status", verifyToken, isAdmin, async (req, res) => {
-  const { slug } = req.params;
+/** Hide or show a material by flipping deleted_at. */
+function toggleStatus(slug) {
   if (!slug) {
-    return res.status(400).json({ success: false, message: "Slug la bat buoc." });
+    throw new HttpError(400, { success: false, message: "Slug la bat buoc." });
   }
 
-  try {
+  return guard(failWith("Loi may chu khi cap nhat trang thai."), async () => {
     const { rows } = await db.query(
       `
       SELECT material_id, deleted_at
@@ -226,7 +199,7 @@ router.put("/:slug/toggle-status", verifyToken, isAdmin, async (req, res) => {
     );
 
     if (!rows.length) {
-      return res.status(404).json({ success: false, message: "Vat lieu khong tim thay." });
+      throw new HttpError(404, { success: false, message: "Vat lieu khong tim thay." });
     }
 
     const material = rows[0];
@@ -238,31 +211,24 @@ router.put("/:slug/toggle-status", verifyToken, isAdmin, async (req, res) => {
       [newDeletedAt, material.material_id]
     );
 
-    return res.json({
+    return {
       success: true,
       message: "Cap nhat trang thai thanh cong.",
       status: newStatus,
-    });
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Loi may chu khi cap nhat trang thai.",
-    });
-  }
-});
+    };
+  });
+}
 
-// DELETE vat lieu
-router.delete("/:slug", verifyToken, isAdmin, async (req, res) => {
-  const { slug } = req.params;
-
-  try {
+/** A material used by products is hidden instead of deleted. */
+function remove(slug) {
+  return guard(failWith("Loi may chu khi xoa vat lieu."), async () => {
     const { rows: materialRows } = await db.query(
       "SELECT material_id FROM materials WHERE slug = $1 LIMIT 1",
       [slug]
     );
 
     if (!materialRows.length) {
-      return res.status(404).json({
+      throw new HttpError(404, {
         success: false,
         message: "Vat lieu khong tim thay de xoa.",
       });
@@ -283,12 +249,12 @@ router.delete("/:slug", verifyToken, isAdmin, async (req, res) => {
           [materialId]
         );
 
-        return res.status(200).json({
+        return {
           success: false,
           message:
             "Da co san pham su dung chat lieu nay, trang thai se chuyen sang an.",
           status: "hidden",
-        });
+        };
       }
     }
 
@@ -297,22 +263,17 @@ router.delete("/:slug", verifyToken, isAdmin, async (req, res) => {
     ]);
 
     if (rowCount === 0) {
-      return res.status(404).json({
+      throw new HttpError(404, {
         success: false,
         message: "Vat lieu khong tim thay de xoa.",
       });
     }
 
-    return res.status(200).json({
+    return {
       success: true,
       message: "Vat lieu da duoc xoa thanh cong.",
-    });
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Loi may chu khi xoa vat lieu.",
-    });
-  }
-});
+    };
+  });
+}
 
-module.exports = router;
+module.exports = { list, getBySlug, create, update, toggleStatus, remove };

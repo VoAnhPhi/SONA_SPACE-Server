@@ -33,7 +33,7 @@ const mounts = [
   { path: "/api/color", router: require("./colors/colors.routes") },
   { path: "/api/upload", router: require("../../routes/upload") },
   { path: "/api/banners", router: require("../../routes/banners") },
-  { path: "/api/materials", router: require("../../routes/materials") },
+  { path: "/api/materials", router: require("./materials/materials.routes") },
   { path: "/api/revenue", router: require("../../routes/revenue") },
   { path: "/api/notify", router: require("../../routes/notify") },
   {
