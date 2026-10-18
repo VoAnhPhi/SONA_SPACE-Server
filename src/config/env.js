@@ -38,10 +38,29 @@ const corsOrigins = (process.env.CORS_ORIGINS || "")
   .map((origin) => origin.trim())
   .filter(Boolean);
 
+// VNPay sandbox credentials are shared test values from VNPay's public documentation; production
+// must provide its own through VNPAY_TMN_CODE and VNPAY_SECURE_SECRET.
+const vnpaySandbox = { tmnCode: "DHF21S3V", secureSecret: "NXM2DJWRF8RLC4R5VBK85OJZS1UE9KI6F" };
+
+const payments = Object.freeze({
+  momo: Object.freeze({
+    partnerCode: "MOMO",
+    accessKey: `${process.env.ACCESSKEY}`,
+    secretKey: `${process.env.SECRETKEY}`,
+    apiBase: "https://test-payment.momo.vn/v2/gateway/api",
+  }),
+  vnpay: Object.freeze({
+    tmnCode: process.env.VNPAY_TMN_CODE || (isProduction ? "" : vnpaySandbox.tmnCode),
+    secureSecret: process.env.VNPAY_SECURE_SECRET || (isProduction ? "" : vnpaySandbox.secureSecret),
+    host: "https://sandbox.vnpayment.vn",
+  }),
+});
+
 module.exports = Object.freeze({
   isProduction,
   port: process.env.PORT || "3501",
   // Unset keeps the open policy outside production (local dev and QA scripts).
   corsOrigin: corsOrigins.length ? corsOrigins : isProduction ? false : "*",
+  payments,
   assertRequired,
 });

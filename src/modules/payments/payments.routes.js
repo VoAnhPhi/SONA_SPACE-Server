@@ -1,8 +1,8 @@
 const express = require("express");
 const router = express.Router();
-const db = require("../src/config/database");
-const { withTransaction } = require("../src/shared/db/transaction");
-const { verifyToken, isAdmin } = require("../src/shared/middleware/auth");
+const db = require("../../config/database");
+const { withTransaction } = require("../../shared/db/transaction");
+const { verifyToken, isAdmin } = require("../../shared/middleware/auth");
 
 const paymentSelect = `
   p.payment_id,

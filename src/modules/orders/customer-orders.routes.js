@@ -1,8 +1,9 @@
 const express = require("express");
 const router = express.Router();
-const db = require("../src/config/database");
-const { withTransaction } = require("../src/shared/db/transaction");
-const { verifyToken } = require("../src/shared/middleware/auth");
+const db = require("../../config/database");
+const { withTransaction } = require("../../shared/db/transaction");
+const { verifyToken } = require("../../shared/middleware/auth");
+const { createUserNotification } = require("../notifications/notification-dispatch");
 
 const ORDER_STATUS = {
   CANCELLED: -1,
@@ -107,27 +108,6 @@ function formatOrder(order, itemsMap, returnsMap) {
   }
 
   return result;
-}
-
-async function createOrderNotification(client, { userId, title, message, senderId, link }) {
-  const { rows: types } = await client.query(
-    "SELECT id FROM notification_types WHERE type_code = $1 OR type_code = $2 ORDER BY CASE WHEN type_code = $1 THEN 0 ELSE 1 END LIMIT 1",
-    ["order", "system"]
-  );
-
-  if (types.length === 0) return;
-
-  const { rows: notifications } = await client.query(
-    `INSERT INTO notifications (type_id, title, message, link, sender_id)
-     VALUES ($1, $2, $3, $4, $5)
-     RETURNING id`,
-    [types[0].id, title, message, link || null, senderId || null]
-  );
-
-  await client.query(
-    "INSERT INTO user_notifications (user_id, notification_id, is_read, read_at, is_deleted) VALUES ($1, $2, 0, NULL, 0)",
-    [userId, notifications[0].id]
-  );
 }
 
 router.get("/:userId", verifyToken, async (req, res) => {
@@ -471,12 +451,13 @@ router.put("/cancel-item/:orderId/:itemId", verifyToken, async (req, res) => {
       }
 
       if (isAdmin && orderItem.user_id) {
-        await createOrderNotification(client, {
+        await createUserNotification(client, {
           userId: orderItem.user_id,
           title: "Order item cancelled",
           message: `Item "${orderItem.product_name}" in order #${orderItem.order_hash} was cancelled by staff.${reason ? ` Reason: ${reason}` : ""}`,
           senderId: userId,
           link: `/orders/${orderId}`,
+          typeCodes: ["order", "system"],
         });
       }
 
@@ -664,12 +645,13 @@ router.put("/cancel/:orderId", verifyToken, async (req, res) => {
       );
 
       if (isAdmin && order.user_id) {
-        await createOrderNotification(client, {
+        await createUserNotification(client, {
           userId: order.user_id,
           title: "Order cancelled",
           message: `Order #${order.order_hash} was cancelled by staff.${reason ? ` Reason: ${reason}` : ""}`,
           senderId: userId,
           link: `/orders/${orderId}`,
+          typeCodes: ["order", "system"],
         });
       }
     });

@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { verifyToken, isAdmin } = require("../src/shared/middleware/auth");
+const { verifyToken, isAdmin } = require("../../shared/middleware/auth");
 
 const ORDER_STATUSES = [
   {
