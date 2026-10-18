@@ -5,6 +5,11 @@
  */
 
 var app = require("../app");
+
+if (!process.env.JWT_SECRET) {
+  console.error("JWT_SECRET is not set. Set it in the environment or .env before starting the server.");
+  process.exit(1);
+}
 var debug = require("debug")("fpoly-api:server");
 var http = require("http");
 
@@ -25,7 +30,7 @@ var server = http.createServer(app);
 // SOCKET.IO setup
 const { Server } = require("socket.io");
 const io = new Server(server, { 
-  cors: { origin: "*" },
+  cors: { origin: app.locals.corsOrigin },
   maxHttpBufferSize: 20 * 1024 * 1024 // 20MB
 });
 

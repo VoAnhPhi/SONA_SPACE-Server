@@ -183,7 +183,7 @@ router.get("/admin", verifyToken, isAdmin, async (req, res) => {
   }
 });
 
-router.get("/staff", async (req, res) => {
+router.get("/staff", verifyToken, isAdmin, async (req, res) => {
   try {
     const { rows } = await db.query(`
       SELECT 

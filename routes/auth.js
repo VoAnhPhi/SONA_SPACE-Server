@@ -7,8 +7,7 @@ const jwt = require("jsonwebtoken");
 const { sendEmail } = require("../services/mailVerify");
 const { authenticateGoogleUser, GoogleAuthError } = require("../services/googleAuthService");
 
-// Lấy JWT secret từ biến môi trường hoặc sử dụng giá trị mặc định
-const JWT_SECRET = process.env.JWT_SECRET || "furnitown-secret-key";
+const JWT_SECRET = process.env.JWT_SECRET;
 const OTP_TYPE_PASSWORD_RESET = "password_reset";
 const getFrontendBaseUrl = () =>
 	(

@@ -347,12 +347,12 @@ router.get("/orders/detail/:id", isAdmin, async (req, res) => {
       const db = require("../config/database");
       const { rows: items } = await db.query(
         `
-        SELECT oi.*, p.product_name, p.product_image, c.color_hex
+        SELECT oi.*, p.product_name, p.product_image, c.color_code AS color_hex
         FROM order_items oi
         LEFT JOIN variant_product vp ON oi.variant_id = vp.variant_id
         LEFT JOIN product p ON vp.product_id = p.product_id
         LEFT JOIN color c ON vp.color_id = c.color_id
-        WHERE oi.order_id = $1 AND oi.deleted_at IS NULL
+        WHERE oi.order_id = $1
       `,
         [orderId]
       );
@@ -685,7 +685,7 @@ router.get("/orders/invoice/:id", async (req, res) => {
         FROM order_items oi
         LEFT JOIN variant_product vp ON oi.variant_id = vp.variant_id
         LEFT JOIN product p ON vp.product_id = p.product_id
-        WHERE oi.order_id = $1 AND oi.deleted_at IS NULL
+        WHERE oi.order_id = $1
       `,
         [orderId]
       );

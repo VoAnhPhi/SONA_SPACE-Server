@@ -6,7 +6,7 @@ const jwt = require("jsonwebtoken");
 const app = require("../app");
 const db = require("../config/database");
 
-const JWT_SECRET = process.env.JWT_SECRET || "furnitown-secret-key";
+const JWT_SECRET = process.env.JWT_SECRET;
 const DASHBOARD_FILE = path.join(__dirname, "../routes/dashboard.js");
 
 function signToken(user) {

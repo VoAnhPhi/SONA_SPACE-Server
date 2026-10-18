@@ -74,7 +74,14 @@ app.use(cookieParser());
 // Serve static files
 app.use(express.static(path.join(__dirname, "public")));
 
-app.use(cors());
+// CORS_ORIGINS: comma-separated allowlist. Unset keeps the open policy outside production.
+const corsOrigins = (process.env.CORS_ORIGINS || "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+const isProduction = process.env.NODE_ENV === "production";
+app.locals.corsOrigin = corsOrigins.length ? corsOrigins : isProduction ? false : "*";
+app.use(cors({ origin: app.locals.corsOrigin }));
 
 // Add a health check endpoint
 app.get("/health", function (req, res) {
@@ -137,7 +144,9 @@ app.use("/api/news", newsRouter);
 app.use("/api/news-categories", newsCategoriesRouter);
 app.use("/api/contact-form-design", contactFormsDesignRouter);
 app.use("/api/comments", commentsRouter);
-app.use("/api/debug", debugRouter);
+if (!isProduction) {
+  app.use("/api/debug", debugRouter);
+}
 app.use("/api/orders-id", ordersIdRouter);
 app.use("/api/wishlists-id", wishlistsIdRouter);
 // API routes - protected

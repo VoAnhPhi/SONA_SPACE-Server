@@ -5,7 +5,7 @@ const app = require("../app");
 const cloudinary = require("../config/cloudinary");
 const db = require("../config/database");
 
-const JWT_SECRET = process.env.JWT_SECRET || "furnitown-secret-key";
+const JWT_SECRET = process.env.JWT_SECRET;
 
 function signToken(user) {
   return jwt.sign({ id: user.user_id, role: user.user_role }, JWT_SECRET, {

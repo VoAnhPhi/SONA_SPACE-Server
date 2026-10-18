@@ -4,7 +4,7 @@ const jwt = require("jsonwebtoken");
 const app = require("../app");
 const db = require("../config/database");
 
-const JWT_SECRET = process.env.JWT_SECRET || "furnitown-secret-key";
+const JWT_SECRET = process.env.JWT_SECRET;
 
 const PASS_MUTATION = [200, 201, 400, 404, 409];
 const PASS_READ = [200, 404];

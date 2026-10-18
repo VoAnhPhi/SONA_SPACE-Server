@@ -130,9 +130,15 @@ async function createOrderNotification(client, { userId, title, message, senderI
   );
 }
 
-router.get("/:userId", async (req, res) => {
+router.get("/:userId", verifyToken, async (req, res) => {
   try {
     const userId = ensurePositiveId(req.params.userId, "user ID");
+
+    if (!isPrivilegedUser(req) && Number(req.user.id) !== userId) {
+      return res
+        .status(403)
+        .json({ error: "You do not have permission to view these orders" });
+    }
 
     const { rows: orders } = await db.query(
       `

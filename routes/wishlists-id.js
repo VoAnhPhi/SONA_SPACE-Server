@@ -1,18 +1,30 @@
 const express = require("express");
 const router = express.Router();
 const db = require("../config/database");
+const { verifyToken } = require("../middleware/auth");
+
+function isPrivilegedUser(req) {
+  const role = req.user?.role?.toLowerCase();
+  return role === "admin" || role === "staff" || Boolean(req.user?.isAdmin);
+}
 
 /**
  * @route   GET /api/wishlists-id/:userId
- * @desc    Lay danh sach wishlist cua user theo user_id (Public API)
- * @access  Public
+ * @desc    Lay danh sach wishlist cua user theo user_id
+ * @access  Private (owner, admin or staff)
  */
-router.get("/:userId", async (req, res) => {
+router.get("/:userId", verifyToken, async (req, res) => {
   try {
     const userId = Number.parseInt(req.params.userId, 10);
 
     if (!Number.isInteger(userId) || userId <= 0) {
       return res.status(400).json({ error: "Invalid user ID" });
+    }
+
+    if (!isPrivilegedUser(req) && Number(req.user.id) !== userId) {
+      return res
+        .status(403)
+        .json({ error: "You do not have permission to view this wishlist" });
     }
 
     const { rows: wishlists } = await db.query(
