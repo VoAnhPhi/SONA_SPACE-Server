@@ -1,8 +1,12 @@
-const express = require("express");
-const router = express.Router();
-const db = require("../src/config/database");
-const { verifyToken } = require("../src/shared/middleware/auth");
+"use strict";
 
+const db = require("../../config/database");
+const HttpError = require("../../shared/http/http-error");
+const guard = require("../../shared/http/guard");
+
+// One table serves both lists: status 0 is the shopping cart, status 1 is the wishlist.
+
+// Positive or negative integers pass; the callers reject 0 through `!id`.
 function parseId(value) {
   const parsed = Number.parseInt(value, 10);
   return Number.isInteger(parsed) ? parsed : null;
@@ -46,20 +50,34 @@ const COMMENT_STATS_SQL = `
   ) AS average_rating
 `;
 
-/**
- * @route   GET /api/wishlists
- * @desc    Lay danh sach wishlist cua nguoi dung hien tai
- * @access  Private
- */
-router.get("/", verifyToken, async (req, res) => {
-  const userId = req.user.id;
-  const status = parseStatus(req.query.status);
+const ITEM_WITH_STATS_SQL = `
+        SELECT
+          w.wishlist_id,
+          w.quantity,
+          w.created_at,
+          v.*,
+          ${COMMENT_STATS_SQL}
+        FROM wishlist w
+        JOIN variant_product v ON w.variant_id = v.variant_id
+        JOIN product p ON v.product_id = p.product_id
+        WHERE w.wishlist_id = $1
+`;
+
+function requireId(rawId, message) {
+  const id = parseId(rawId);
+  if (!id) throw new HttpError(400, { error: message });
+  return id;
+}
+
+/** The current user's cart (status 0) or wishlist (status 1). */
+function listForUser(userId, rawStatus) {
+  const status = parseStatus(rawStatus);
 
   if (status === null) {
-    return res.status(400).json({ error: "Trang thai khong hop le (phai la 0 hoac 1)" });
+    throw new HttpError(400, { error: "Trang thai khong hop le (phai la 0 hoac 1)" });
   }
 
-  try {
+  return guard({ error: "Loi khi lay du lieu gio hang/wishlist" }, async () => {
     const { rows: items } = await db.query(
       `
       SELECT
@@ -111,27 +129,18 @@ router.get("/", verifyToken, async (req, res) => {
       [userId, status]
     );
 
-    const result = items.map((item) => ({
+    return items.map((item) => ({
       ...item,
       colors: normalizeJson(item.colors, []),
       isWishlist: true,
       average_rating: item.average_rating !== null ? Number(item.average_rating) : null,
     }));
+  });
+}
 
-    return res.status(200).json(result);
-  } catch (error) {
-    return res.status(500).json({ error: "Loi khi lay du lieu gio hang/wishlist" });
-  }
-});
-
-router.get("/variant/:variantId", verifyToken, async (req, res) => {
-  try {
-    const variantId = parseId(req.params.variantId);
-    const userId = req.user.id;
-
-    if (!variantId) {
-      return res.status(400).json({ error: "Invalid variant ID" });
-    }
+function hasVariant(rawVariantId, userId) {
+  return guard({ error: "Failed to check variant in wishlist" }, async () => {
+    const variantId = requireId(rawVariantId, "Invalid variant ID");
 
     const { rows: wishlistRows } = await db.query(
       `
@@ -142,35 +151,31 @@ router.get("/variant/:variantId", verifyToken, async (req, res) => {
       [variantId, userId]
     );
 
-    return res.status(200).json({
+    return {
       exists: wishlistRows.length > 0,
       wishlist_id: wishlistRows.length > 0 ? wishlistRows[0].wishlist_id : null,
-    });
-  } catch (error) {
-    return res.status(500).json({ error: "Failed to check variant in wishlist" });
-  }
-});
+    };
+  });
+}
 
 /**
- * @route   POST /api/wishlists
- * @desc    Them san pham vao wishlist
- * @access  Private
+ * Add a variant to the wishlist (status 1) or the cart (status 0, quantity adds up).
+ * Resolves to { status, body } because the success code differs: 201 new row, 200 cart increase.
  */
-router.post("/", verifyToken, async (req, res) => {
-  try {
-    const { variant_id, status, quantity = 1 } = req.body;
-    const userId = req.user.id;
+function add(body, userId) {
+  return guard({ error: "Failed to process request" }, async () => {
+    const { variant_id, status, quantity = 1 } = body;
 
     const parsedVariantId = parseId(variant_id);
     const parsedStatus = parseStatus(String(status));
     const parsedQuantity = Number(quantity);
 
     if (!parsedVariantId || (parsedStatus === 0 && parsedQuantity < 1)) {
-      return res.status(400).json({ error: "Variant ID and valid quantity are required" });
+      throw new HttpError(400, { error: "Variant ID and valid quantity are required" });
     }
 
     if (parsedStatus === null) {
-      return res.status(400).json({ error: "Invalid status: must be 0 (cart) or 1 (wishlist)" });
+      throw new HttpError(400, { error: "Invalid status: must be 0 (cart) or 1 (wishlist)" });
     }
 
     const { rows: variantRows } = await db.query(
@@ -178,7 +183,7 @@ router.post("/", verifyToken, async (req, res) => {
       [parsedVariantId]
     );
     if (!variantRows.length) {
-      return res.status(404).json({ error: "Variant not found" });
+      throw new HttpError(404, { error: "Variant not found" });
     }
 
     const { rows: existingRows } = await db.query(
@@ -192,7 +197,7 @@ router.post("/", verifyToken, async (req, res) => {
 
     if (parsedStatus === 1) {
       if (existingRows.length > 0) {
-        return res.status(400).json({ error: "Variant already in wishlist" });
+        throw new HttpError(400, { error: "Variant already in wishlist" });
       }
 
       const { rows: insertedRows } = await db.query(
@@ -204,28 +209,15 @@ router.post("/", verifyToken, async (req, res) => {
         [userId, parsedVariantId]
       );
 
-      const wishlistId = insertedRows[0].wishlist_id;
+      const { rows: itemRows } = await db.query(ITEM_WITH_STATS_SQL, [insertedRows[0].wishlist_id]);
 
-      const { rows: itemRows } = await db.query(
-        `
-        SELECT
-          w.wishlist_id,
-          w.quantity,
-          w.created_at,
-          v.*,
-          ${COMMENT_STATS_SQL}
-        FROM wishlist w
-        JOIN variant_product v ON w.variant_id = v.variant_id
-        JOIN product p ON v.product_id = p.product_id
-        WHERE w.wishlist_id = $1
-        `,
-        [wishlistId]
-      );
-
-      return res.status(201).json({
-        message: "Variant added to wishlist successfully",
-        wishlistItem: itemRows[0],
-      });
+      return {
+        status: 201,
+        body: {
+          message: "Variant added to wishlist successfully",
+          wishlistItem: itemRows[0],
+        },
+      };
     }
 
     if (existingRows.length > 0) {
@@ -236,7 +228,7 @@ router.post("/", verifyToken, async (req, res) => {
         [newQuantity, existingRows[0].wishlist_id]
       );
 
-      return res.status(200).json({ message: "Cart item updated successfully" });
+      return { status: 200, body: { message: "Cart item updated successfully" } };
     }
 
     const { rows: insertedRows } = await db.query(
@@ -248,46 +240,25 @@ router.post("/", verifyToken, async (req, res) => {
       [userId, parsedVariantId, parsedQuantity]
     );
 
-    const wishlistId = insertedRows[0].wishlist_id;
+    const { rows: itemRows } = await db.query(ITEM_WITH_STATS_SQL, [insertedRows[0].wishlist_id]);
 
-    const { rows: itemRows } = await db.query(
-      `
-      SELECT
-        w.wishlist_id,
-        w.quantity,
-        w.created_at,
-        v.*,
-        ${COMMENT_STATS_SQL}
-      FROM wishlist w
-      JOIN variant_product v ON w.variant_id = v.variant_id
-      JOIN product p ON v.product_id = p.product_id
-      WHERE w.wishlist_id = $1
-      `,
-      [wishlistId]
-    );
+    return {
+      status: 201,
+      body: {
+        message: "Variant added to cart successfully",
+        cartItem: itemRows[0],
+      },
+    };
+  });
+}
 
-    return res.status(201).json({
-      message: "Variant added to cart successfully",
-      cartItem: itemRows[0],
-    });
-  } catch (error) {
-    return res.status(500).json({ error: "Failed to process request" });
-  }
-});
-
-/**
- * @route   PUT /api/wishlists/:id
- * @desc    Cap nhat so luong san pham trong gio hang
- * @access  Private
- */
-router.put("/:id", verifyToken, async (req, res) => {
-  try {
-    const wishlistId = parseId(req.params.id);
-    const { quantity } = req.body;
-    const userId = req.user.id;
+function updateCartQuantity(rawId, body, userId) {
+  return guard({ error: "Cap nhat so luong that bai" }, async () => {
+    const wishlistId = parseId(rawId);
+    const { quantity } = body;
 
     if (!wishlistId || !Number.isInteger(quantity) || quantity < 1) {
-      return res.status(400).json({ error: "Du lieu khong hop le" });
+      throw new HttpError(400, { error: "Du lieu khong hop le" });
     }
 
     const { rows: existingRows } = await db.query(
@@ -300,7 +271,7 @@ router.put("/:id", verifyToken, async (req, res) => {
     );
 
     if (!existingRows.length) {
-      return res.status(404).json({ error: "Khong tim thay san pham trong gio hang" });
+      throw new HttpError(404, { error: "Khong tim thay san pham trong gio hang" });
     }
 
     await db.query(
@@ -308,36 +279,24 @@ router.put("/:id", verifyToken, async (req, res) => {
       [quantity, wishlistId]
     );
 
-    return res.status(200).json({ message: "Cap nhat so luong thanh cong" });
-  } catch (error) {
-    return res.status(500).json({ error: "Cap nhat so luong that bai" });
-  }
-});
+    return { message: "Cap nhat so luong thanh cong" };
+  });
+}
 
-/**
- * @route   DELETE /api/wishlists/clear
- * @desc    Xoa toan bo cart item (status = 0)
- * @access  Private
- */
-router.delete("/clear", verifyToken, async (req, res) => {
-  try {
-    const userId = req.user.id;
-
+function clearCart(userId) {
+  return guard({ error: "Da xay ra loi khi xoa gio hang" }, async () => {
     await db.query("DELETE FROM wishlist WHERE user_id = $1 AND status = 0", [userId]);
 
-    return res.status(200).json({ message: "Da xoa cac san pham chua thanh toan khoi gio hang" });
-  } catch (error) {
-    return res.status(500).json({ error: "Da xay ra loi khi xoa gio hang" });
-  }
-});
+    return { message: "Da xoa cac san pham chua thanh toan khoi gio hang" };
+  });
+}
 
-router.delete("/clearid", verifyToken, async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const { selectedItemIds = [] } = req.body;
+function clearSelectedCartItems(body, userId) {
+  return guard({ error: "Da xay ra loi khi xoa gio hang" }, async () => {
+    const { selectedItemIds = [] } = body;
 
     if (!Array.isArray(selectedItemIds) || selectedItemIds.length === 0) {
-      return res.status(400).json({ error: "Danh sach san pham can xoa khong hop le." });
+      throw new HttpError(400, { error: "Danh sach san pham can xoa khong hop le." });
     }
 
     const parsedIds = selectedItemIds
@@ -345,7 +304,7 @@ router.delete("/clearid", verifyToken, async (req, res) => {
       .filter((id) => Number.isInteger(id));
 
     if (parsedIds.length === 0) {
-      return res.status(400).json({ error: "Danh sach san pham can xoa khong hop le." });
+      throw new HttpError(400, { error: "Danh sach san pham can xoa khong hop le." });
     }
 
     await db.query(
@@ -353,20 +312,13 @@ router.delete("/clearid", verifyToken, async (req, res) => {
       [userId, parsedIds]
     );
 
-    return res.status(200).json({ message: "Da xoa cac san pham da chon khoi gio hang" });
-  } catch (error) {
-    return res.status(500).json({ error: "Da xay ra loi khi xoa gio hang" });
-  }
-});
+    return { message: "Da xoa cac san pham da chon khoi gio hang" };
+  });
+}
 
-router.delete("/:id", verifyToken, async (req, res) => {
-  try {
-    const wishlistId = parseId(req.params.id);
-    const userId = req.user.id;
-
-    if (!wishlistId) {
-      return res.status(400).json({ error: "Invalid wishlist ID" });
-    }
+function removeById(rawId, userId) {
+  return guard({ error: "Da xay ra loi khi xoa san pham" }, async () => {
+    const wishlistId = requireId(rawId, "Invalid wishlist ID");
 
     const { rows: existingRows } = await db.query(
       "SELECT wishlist_id FROM wishlist WHERE wishlist_id = $1 AND user_id = $2",
@@ -374,50 +326,31 @@ router.delete("/:id", verifyToken, async (req, res) => {
     );
 
     if (!existingRows.length) {
-      return res.status(404).json({ error: "Wishlist item not found or not owned by user" });
+      throw new HttpError(404, { error: "Wishlist item not found or not owned by user" });
     }
 
     await db.query("DELETE FROM wishlist WHERE wishlist_id = $1", [wishlistId]);
 
-    return res.status(200).json({ message: "Xoa san pham thanh cong" });
-  } catch (error) {
-    return res.status(500).json({ error: "Da xay ra loi khi xoa san pham" });
-  }
-});
+    return { message: "Xoa san pham thanh cong" };
+  });
+}
 
-/**
- * @route   DELETE /api/wishlists/variant/:variantId
- * @desc    Xoa khoi wishlist theo variant_id
- * @access  Private
- */
-router.delete("/variant/:variantId", verifyToken, async (req, res) => {
-  try {
-    const variantId = parseId(req.params.variantId);
-    const userId = req.user.id;
-
-    if (!variantId) {
-      return res.status(400).json({ error: "Invalid variant ID" });
-    }
+function removeByVariant(rawVariantId, userId) {
+  return guard({ success: false, message: "Loi server khi xoa" }, async () => {
+    const variantId = requireId(rawVariantId, "Invalid variant ID");
 
     await db.query(
       "DELETE FROM wishlist WHERE variant_id = $1 AND user_id = $2 AND status = 1",
       [variantId, userId]
     );
 
-    return res.status(200).json({ success: true, message: "Xoa wishlist thanh cong" });
-  } catch (error) {
-    return res.status(500).json({ success: false, message: "Loi server khi xoa" });
-  }
-});
+    return { success: true, message: "Xoa wishlist thanh cong" };
+  });
+}
 
-router.delete("/product/:productId", verifyToken, async (req, res) => {
-  try {
-    const productId = parseId(req.params.productId);
-    const userId = req.user.id;
-
-    if (!productId) {
-      return res.status(400).json({ error: "Invalid product ID" });
-    }
+function removeByProduct(rawProductId, userId) {
+  return guard({ error: "Failed to remove product from wishlist" }, async () => {
+    const productId = requireId(rawProductId, "Invalid product ID");
 
     const { rows: wishlistRows } = await db.query(
       `
@@ -431,7 +364,7 @@ router.delete("/product/:productId", verifyToken, async (req, res) => {
     );
 
     if (!wishlistRows.length) {
-      return res.status(404).json({ error: "Product not found in wishlist" });
+      throw new HttpError(404, { error: "Product not found in wishlist" });
     }
 
     await db.query(
@@ -445,25 +378,13 @@ router.delete("/product/:productId", verifyToken, async (req, res) => {
       [productId, userId]
     );
 
-    return res.json({ message: "Product removed from wishlist successfully" });
-  } catch (error) {
-    return res.status(500).json({ error: "Failed to remove product from wishlist" });
-  }
-});
+    return { message: "Product removed from wishlist successfully" };
+  });
+}
 
-/**
- * @route   GET /api/wishlists/check/:productId
- * @desc    Kiem tra san pham co trong wishlist khong
- * @access  Private
- */
-router.get("/check/:productId", verifyToken, async (req, res) => {
-  try {
-    const productId = parseId(req.params.productId);
-    const userId = req.user.id;
-
-    if (!productId) {
-      return res.status(400).json({ error: "Invalid product ID" });
-    }
+function checkProduct(rawProductId, userId) {
+  return guard({ error: "Failed to check wishlist status" }, async () => {
+    const productId = requireId(rawProductId, "Invalid product ID");
 
     const { rows: wishlistRows } = await db.query(
       `
@@ -476,13 +397,82 @@ router.get("/check/:productId", verifyToken, async (req, res) => {
       [productId, userId]
     );
 
-    return res.json({
+    return {
       in_wishlist: wishlistRows.length > 0,
       wishlist_id: wishlistRows.length > 0 ? wishlistRows[0].wishlist_id : null,
-    });
-  } catch (error) {
-    return res.status(500).json({ error: "Failed to check wishlist status" });
-  }
-});
+    };
+  });
+}
 
-module.exports = router;
+function isPrivilegedUser(user) {
+  const role = user?.role?.toLowerCase();
+  return role === "admin" || role === "staff" || Boolean(user?.isAdmin);
+}
+
+/** Wishlist rows of any user with their contact details; owner, admin or staff only. */
+function listByUserId(rawUserId, requester) {
+  return guard((error) => ({ error: "Failed to fetch wishlists", details: error.message }), async () => {
+    const userId = Number.parseInt(rawUserId, 10);
+
+    if (!Number.isInteger(userId) || userId <= 0) {
+      throw new HttpError(400, { error: "Invalid user ID" });
+    }
+
+    if (!isPrivilegedUser(requester) && Number(requester.id) !== userId) {
+      throw new HttpError(403, { error: "You do not have permission to view this wishlist" });
+    }
+
+    const { rows: wishlists } = await db.query(
+      `
+      SELECT
+        wl.wishlist_id,
+        wl.status,
+        wl.created_at,
+        vp.variant_id,
+        vp.product_id,
+        p.product_name,
+        vp.variant_product_price,
+        vp.variant_product_price_sale,
+        vp.variant_product_list_image,
+        u.user_id,
+        u.user_name,
+        u.user_gmail,
+        u.user_address
+      FROM wishlist wl
+      JOIN "user" u ON wl.user_id = u.user_id
+      JOIN variant_product vp ON wl.variant_id = vp.variant_id
+      JOIN product p ON vp.product_id = p.product_id
+      WHERE wl.user_id = $1 AND wl.deleted_at IS NULL
+      ORDER BY wl.created_at DESC
+      `,
+      [userId]
+    );
+
+    if (wishlists.length === 0) {
+      return {
+        message: "No wishlist items found for this user",
+        wishlists: [],
+      };
+    }
+
+    return {
+      user_id: userId,
+      wishlist_count: wishlists.length,
+      wishlists,
+    };
+  });
+}
+
+module.exports = {
+  listForUser,
+  hasVariant,
+  add,
+  updateCartQuantity,
+  clearCart,
+  clearSelectedCartItems,
+  removeById,
+  removeByVariant,
+  removeByProduct,
+  checkProduct,
+  listByUserId,
+};

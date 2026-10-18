@@ -21,11 +21,11 @@ const mounts = [
   { path: "/api/comments", router: require("./comments/comments.routes") },
   { path: "/api/debug", router: require("../../routes/debug"), enabled: !config.isProduction },
   { path: "/api/orders-id", router: require("../../routes/orders-id") },
-  { path: "/api/wishlists-id", router: require("../../routes/wishlists-id") },
+  { path: "/api/wishlists-id", router: require("./wishlists/wishlists-by-user.routes") },
 
   // protected
   { path: "/api/users", router: require("../../routes/users") },
-  { path: "/api/wishlists", use: [verifyToken], router: require("../../routes/wishlists") },
+  { path: "/api/wishlists", use: [verifyToken], router: require("./wishlists/wishlists.routes") },
   { path: "/api/orders", router: require("../../routes/orders") },
   { path: "/api/order-status", use: [verifyToken], router: require("../../routes/orderStatus") },
   { path: "/api/payments", use: [verifyToken], router: require("../../routes/payments") },
