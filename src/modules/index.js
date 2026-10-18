@@ -18,7 +18,7 @@ const mounts = [
   { path: "/api/news", router: require("./news/news.routes") },
   { path: "/api/news-categories", router: require("./news/news-categories.routes") },
   { path: "/api/contact-form-design", router: require("../../routes/contactFormsDesign") },
-  { path: "/api/comments", router: require("../../routes/comments") },
+  { path: "/api/comments", router: require("./comments/comments.routes") },
   { path: "/api/debug", router: require("../../routes/debug"), enabled: !config.isProduction },
   { path: "/api/orders-id", router: require("../../routes/orders-id") },
   { path: "/api/wishlists-id", router: require("../../routes/wishlists-id") },

@@ -1,29 +1,36 @@
-const express = require("express");
-const router = express.Router();
-const db = require("../src/config/database");
-const { verifyToken, isAdmin } = require("../src/shared/middleware/auth");
-const { withTransaction } = require("../src/shared/db/transaction");
+"use strict";
 
+const db = require("../../config/database");
+const { withTransaction } = require("../../shared/db/transaction");
+const HttpError = require("../../shared/http/http-error");
+const guard = require("../../shared/http/guard");
+
+// Comments reach a product through order_item -> variant -> product
 const COMMENT_PRODUCT_JOINS = `
   LEFT JOIN order_items oi ON c.order_item_id = oi.order_item_id
   LEFT JOIN variant_product vp ON oi.variant_id = vp.variant_id
   LEFT JOIN product p ON vp.product_id = p.product_id
 `;
 
-/**
- * @route   GET /api/comments
- * @desc    Lay danh sach binh luan/danh gia
- * @access  Public
- */
-router.get("/", async (req, res) => {
-  try {
-    const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 10;
-    const offset = (page - 1) * limit;
-    const productId = req.query.product_id ? Number(req.query.product_id) : null;
+function requireInteger(rawValue, message) {
+  const value = Number(rawValue);
+  if (!Number.isInteger(value)) throw new HttpError(400, { error: message });
+  return value;
+}
+
+function paginate(query, defaultLimit) {
+  const page = parseInt(query.page, 10) || 1;
+  const limit = parseInt(query.limit, 10) || defaultLimit;
+  return { page, limit, offset: (page - 1) * limit };
+}
+
+function list(query) {
+  return guard({ error: "Failed to fetch comments" }, async () => {
+    const { page, limit, offset } = paginate(query, 10);
+    const productId = query.product_id ? Number(query.product_id) : null;
 
     if (productId !== null && !Number.isInteger(productId)) {
-      return res.status(400).json({ error: "Invalid product ID" });
+      throw new HttpError(400, { error: "Invalid product ID" });
     }
 
     const whereClauses = ["c.deleted_at IS NULL"];
@@ -76,35 +83,27 @@ router.get("/", async (req, res) => {
       listParams
     );
 
-    const normalized = comments.map((c) => ({
-      ...c,
-      comment_title: null,
-      comment_description: c.comment_content,
-      comment_reaction: null,
-      user_name: `User ${c.user_id}`,
-    }));
-
-    return res.json({
-      comments: normalized,
+    return {
+      comments: comments.map((c) => ({
+        ...c,
+        comment_title: null,
+        comment_description: c.comment_content,
+        comment_reaction: null,
+        user_name: `User ${c.user_id}`,
+      })),
       pagination: {
         currentPage: page,
         totalPages,
         totalComments,
         commentsPerPage: limit,
       },
-    });
-  } catch (error) {
-    return res.status(500).json({ error: "Failed to fetch comments" });
-  }
-});
+    };
+  });
+}
 
-/**
- * @route   GET /api/comments/admin
- * @desc    Lay tat ca binh luan cho admin
- * @access  Private
- */
-router.get("/admin", verifyToken, isAdmin, async (req, res) => {
-  try {
+/** Every visible comment with author, product and order (admin). */
+function listForAdmin() {
+  return guard({ error: "Loi may chu khi lay binh luan" }, async () => {
     const { rows } = await db.query(`
       SELECT
         c.comment_id,
@@ -132,26 +131,22 @@ router.get("/admin", verifyToken, isAdmin, async (req, res) => {
       ORDER BY c.created_at DESC
     `);
 
-    return res.json(rows);
-  } catch (error) {
-    return res.status(500).json({ error: "Loi may chu khi lay binh luan" });
-  }
-});
+    return rows;
+  });
+}
 
-router.put("/:comment_id/status", verifyToken, isAdmin, async (req, res) => {
-  try {
-    const commentId = Number(req.params.comment_id);
-    if (!Number.isInteger(commentId)) {
-      return res.status(400).json({ error: "Invalid comment ID" });
-    }
+/** Admin moderation: set the status and/or soft-delete or restore. */
+function moderate(rawId, body) {
+  return guard({ error: "Failed to update comment status" }, async () => {
+    const commentId = requireInteger(rawId, "Invalid comment ID");
 
-    const { status, deleted } = req.body;
+    const { status, deleted } = body;
     const { rows: comments } = await db.query(
       "SELECT comment_id FROM comment WHERE comment_id = $1",
       [commentId]
     );
     if (!comments.length) {
-      return res.status(404).json({ error: "Comment not found" });
+      throw new HttpError(404, { error: "Comment not found" });
     }
 
     const updates = [];
@@ -170,42 +165,29 @@ router.put("/:comment_id/status", verifyToken, isAdmin, async (req, res) => {
     updates.push("updated_at = NOW()");
 
     if (updates.length === 1) {
-      return res.status(400).json({ error: "No update data provided" });
+      throw new HttpError(400, { error: "No update data provided" });
     }
 
     values.push(commentId);
     await db.query(
-      `UPDATE comment SET ${updates.join(", ")} WHERE comment_id = $${
-        values.length
-      }`,
+      `UPDATE comment SET ${updates.join(", ")} WHERE comment_id = $${values.length}`,
       values
     );
 
-    const { rows: updated } = await db.query(
-      "SELECT * FROM comment WHERE comment_id = $1",
-      [commentId]
-    );
+    const { rows: updated } = await db.query("SELECT * FROM comment WHERE comment_id = $1", [
+      commentId,
+    ]);
 
-    return res.json({
+    return {
       message: "Comment updated successfully",
       comment: updated[0],
-    });
-  } catch (error) {
-    return res.status(500).json({ error: "Failed to update comment status" });
-  }
-});
+    };
+  });
+}
 
-/**
- * @route   GET /api/comments/:id
- * @desc    Lay chi tiet binh luan
- * @access  Public
- */
-router.get("/:id", async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id)) {
-      return res.status(400).json({ error: "Invalid comment ID" });
-    }
+function getById(rawId) {
+  return guard({ error: "Failed to fetch comment" }, async () => {
+    const id = requireInteger(rawId, "Invalid comment ID");
 
     const { rows } = await db.query(
       `
@@ -224,42 +206,30 @@ router.get("/:id", async (req, res) => {
     );
 
     if (!rows.length) {
-      return res.status(404).json({ error: "Comment not found" });
+      throw new HttpError(404, { error: "Comment not found" });
     }
 
-    return res.json({
+    return {
       ...rows[0],
       comment_title: null,
       comment_description: rows[0].comment_content,
       user_name: `User ${rows[0].user_id}`,
-    });
-  } catch (error) {
-    return res.status(500).json({ error: "Failed to fetch comment" });
-  }
-});
+    };
+  });
+}
 
-/**
- * @route   GET /api/comments/product/:productId
- * @desc    Lay binh luan theo san pham
- * @access  Public
- */
-router.get("/product/:productId", async (req, res) => {
-  try {
-    const productId = Number(req.params.productId);
-    if (!Number.isInteger(productId)) {
-      return res.status(400).json({ error: "Invalid product ID" });
-    }
-
-    const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 5;
-    const offset = (page - 1) * limit;
+/** Reviews of one product with rating statistics. */
+function listByProduct(rawProductId, query) {
+  return guard({ error: "Failed to fetch product comments" }, async () => {
+    const productId = requireInteger(rawProductId, "Invalid product ID");
+    const { page, limit, offset } = paginate(query, 5);
 
     const { rows: products } = await db.query(
       "SELECT product_id FROM product WHERE product_id = $1",
       [productId]
     );
     if (!products.length) {
-      return res.status(404).json({ error: "Product not found" });
+      throw new HttpError(404, { error: "Product not found" });
     }
 
     const { rows: countRows } = await db.query(
@@ -316,7 +286,7 @@ router.get("/product/:productId", async (req, res) => {
       [productId, limit, offset]
     );
 
-    return res.json({
+    return {
       product_id: productId,
       stats: {
         average_rating: Number(ratingStats.average_rating || 0),
@@ -346,31 +316,20 @@ router.get("/product/:productId", async (req, res) => {
         totalComments,
         commentsPerPage: limit,
       },
-    });
-  } catch (error) {
-    return res.status(500).json({ error: "Failed to fetch product comments" });
-  }
-});
+    };
+  });
+}
 
-/**
- * @route   GET /api/comments/user/:userId
- * @desc    Lay binh luan theo nguoi dung
- * @access  Private
- */
-router.get("/user/:userId", verifyToken, async (req, res) => {
-  try {
-    const userId = Number(req.params.userId);
-    if (!Number.isInteger(userId)) {
-      return res.status(400).json({ error: "Invalid user ID" });
+/** Comments of one user; `requester` is req.user. */
+function listByUser(rawUserId, query, requester) {
+  return guard({ error: "Failed to fetch user comments" }, async () => {
+    const userId = requireInteger(rawUserId, "Invalid user ID");
+
+    if (!requester.isAdmin && requester.id !== userId) {
+      throw new HttpError(403, { error: "Unauthorized access to user comments" });
     }
 
-    if (!req.user.isAdmin && req.user.id !== userId) {
-      return res.status(403).json({ error: "Unauthorized access to user comments" });
-    }
-
-    const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 10;
-    const offset = (page - 1) * limit;
+    const { page, limit, offset } = paginate(query, 10);
 
     const { rows: countRows } = await db.query(
       "SELECT COUNT(*)::int AS total FROM comment WHERE user_id = $1 AND deleted_at IS NULL",
@@ -397,7 +356,7 @@ router.get("/user/:userId", verifyToken, async (req, res) => {
       [userId, limit, offset]
     );
 
-    return res.json({
+    return {
       user_id: userId,
       comments: comments.map((c) => ({
         ...c,
@@ -410,34 +369,30 @@ router.get("/user/:userId", verifyToken, async (req, res) => {
         totalComments,
         commentsPerPage: limit,
       },
-    });
-  } catch (error) {
-    return res.status(500).json({ error: "Failed to fetch user comments" });
-  }
-});
+    };
+  });
+}
 
-/**
- * @route   POST /api/comments
- * @desc    Tao binh luan danh gia cho order_item
- * @access  Private
- */
-router.post("/", verifyToken, async (req, res) => {
-  const { order_item_id, comment_title, comment_description, comment_rating } =
-    req.body;
-  const userId = req.user.id;
+/** A customer reviews an item of one of their delivered/completed orders, once per product. */
+function create(body, requester) {
+  const { order_item_id, comment_title, comment_description, comment_rating } = body;
+  const userId = requester.id;
 
-  try {
+  const failure = (error) => ({ error: "Failed to create comment", details: error.message });
+
+  return guard(failure, async () => {
     if (!order_item_id || !comment_description || !comment_rating) {
-      return res.status(400).json({
+      throw new HttpError(400, {
         error: "Missing required fields: order_item_id, comment_description, comment_rating",
       });
     }
 
     const rating = Number(comment_rating);
     if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
-      return res.status(400).json({ error: "Rating must be between 1 and 5" });
+      throw new HttpError(400, { error: "Rating must be between 1 and 5" });
     }
 
+    // The checks only read; throwing before the insert rolls back nothing of substance
     const created = await withTransaction(async (client) => {
       const { rows: orderItemRows } = await client.query(
         `
@@ -458,18 +413,20 @@ router.post("/", verifyToken, async (req, res) => {
       );
 
       if (!orderItemRows.length) {
-        return { notFound: true };
+        throw new HttpError(404, { error: "Order item not found" });
       }
 
       const item = orderItemRows[0];
       if (Number(item.order_user_id) !== Number(userId)) {
-        return { forbidden: true };
+        throw new HttpError(403, { error: "You cannot review this order item" });
       }
       if (![3, 4].includes(Number(item.order_status))) {
-        return { badOrderStatus: true };
+        throw new HttpError(400, {
+          error: "Order item is not in delivered/completed order status",
+        });
       }
       if (item.existing_comment_id !== null) {
-        return { alreadyCommentedOrderItem: true };
+        throw new HttpError(400, { error: "This order item is already reviewed" });
       }
 
       const { rows: existingProductComment } = await client.query(
@@ -484,7 +441,9 @@ router.post("/", verifyToken, async (req, res) => {
         [userId, item.linked_product_id]
       );
       if (existingProductComment.length > 0) {
-        return { alreadyCommentedProduct: true };
+        throw new HttpError(400, {
+          error: "You already reviewed this product from another order item",
+        });
       }
 
       const { rows: insertRows } = await client.query(
@@ -530,79 +489,43 @@ router.post("/", verifyToken, async (req, res) => {
         [newCommentId]
       );
 
-      return {
-        created: createdRows[0],
-      };
+      return createdRows[0];
     });
 
-    if (created.notFound) {
-      return res.status(404).json({ error: "Order item not found" });
-    }
-    if (created.forbidden) {
-      return res.status(403).json({ error: "You cannot review this order item" });
-    }
-    if (created.badOrderStatus) {
-      return res.status(400).json({
-        error: "Order item is not in delivered/completed order status",
-      });
-    }
-    if (created.alreadyCommentedOrderItem) {
-      return res.status(400).json({ error: "This order item is already reviewed" });
-    }
-    if (created.alreadyCommentedProduct) {
-      return res.status(400).json({
-        error: "You already reviewed this product from another order item",
-      });
-    }
-
-    return res.status(201).json({
+    return {
       message: "Comment created successfully",
       comment: {
-        ...created.created,
+        ...created,
         comment_title: comment_title || null,
-        comment_description: created.created.comment_content,
+        comment_description: created.comment_content,
       },
-    });
-  } catch (error) {
-    return res.status(500).json({
-      error: "Failed to create comment",
-      details: error.message,
-    });
-  }
-});
+    };
+  });
+}
 
-/**
- * @route   PUT /api/comments/:id
- * @desc    Cap nhat binh luan
- * @access  Private
- */
-router.put("/:id", verifyToken, async (req, res) => {
-  try {
-    const commentId = Number(req.params.id);
-    if (!Number.isInteger(commentId)) {
-      return res.status(400).json({ error: "Invalid comment ID" });
-    }
+function update(rawId, body, requester) {
+  return guard({ error: "Failed to update comment" }, async () => {
+    const commentId = requireInteger(rawId, "Invalid comment ID");
 
-    const { content, rating, images } = req.body;
+    const { content, rating, images } = body;
 
-    const { rows: comments } = await db.query(
-      "SELECT * FROM comment WHERE comment_id = $1",
-      [commentId]
-    );
+    const { rows: comments } = await db.query("SELECT * FROM comment WHERE comment_id = $1", [
+      commentId,
+    ]);
     if (!comments.length) {
-      return res.status(404).json({ error: "Comment not found" });
+      throw new HttpError(404, { error: "Comment not found" });
     }
     const comment = comments[0];
 
-    if (!req.user.isAdmin && req.user.id !== comment.user_id) {
-      return res.status(403).json({ error: "You can only update your own comments" });
+    if (!requester.isAdmin && requester.id !== comment.user_id) {
+      throw new HttpError(403, { error: "You can only update your own comments" });
     }
 
     if (
       rating !== undefined &&
       (!Number.isFinite(Number(rating)) || Number(rating) < 1 || Number(rating) > 5)
     ) {
-      return res.status(400).json({ error: "Rating must be a number between 1 and 5" });
+      throw new HttpError(400, { error: "Rating must be a number between 1 and 5" });
     }
 
     const updates = [];
@@ -623,24 +546,21 @@ router.put("/:id", verifyToken, async (req, res) => {
 
     updates.push("updated_at = NOW()");
     if (updates.length === 1) {
-      return res.status(400).json({ error: "No update data provided" });
+      throw new HttpError(400, { error: "No update data provided" });
     }
 
     values.push(commentId);
     await db.query(
-      `UPDATE comment SET ${updates.join(", ")} WHERE comment_id = $${
-        values.length
-      }`,
+      `UPDATE comment SET ${updates.join(", ")} WHERE comment_id = $${values.length}`,
       values
     );
 
-    const { rows: updatedRows } = await db.query(
-      "SELECT * FROM comment WHERE comment_id = $1",
-      [commentId]
-    );
+    const { rows: updatedRows } = await db.query("SELECT * FROM comment WHERE comment_id = $1", [
+      commentId,
+    ]);
     const updated = updatedRows[0];
 
-    return res.json({
+    return {
       message: "Comment updated successfully",
       comment: {
         ...updated,
@@ -649,35 +569,24 @@ router.put("/:id", verifyToken, async (req, res) => {
         user_name: `User ${updated.user_id}`,
         user_avatar: null,
       },
-    });
-  } catch (error) {
-    return res.status(500).json({ error: "Failed to update comment" });
-  }
-});
+    };
+  });
+}
 
-/**
- * @route   DELETE /api/comments/:id
- * @desc    Xoa mem binh luan
- * @access  Private
- */
-router.delete("/:id", verifyToken, async (req, res) => {
-  try {
-    const commentId = Number(req.params.id);
-    if (!Number.isInteger(commentId)) {
-      return res.status(400).json({ error: "Invalid comment ID" });
-    }
+function remove(rawId, requester) {
+  return guard({ error: "Failed to delete comment" }, async () => {
+    const commentId = requireInteger(rawId, "Invalid comment ID");
 
-    const { rows: comments } = await db.query(
-      "SELECT * FROM comment WHERE comment_id = $1",
-      [commentId]
-    );
+    const { rows: comments } = await db.query("SELECT * FROM comment WHERE comment_id = $1", [
+      commentId,
+    ]);
     if (!comments.length) {
-      return res.status(404).json({ error: "Comment not found" });
+      throw new HttpError(404, { error: "Comment not found" });
     }
 
     const comment = comments[0];
-    if (!req.user.isAdmin && req.user.id !== comment.user_id) {
-      return res.status(403).json({ error: "You can only delete your own comments" });
+    if (!requester.isAdmin && requester.id !== comment.user_id) {
+      throw new HttpError(403, { error: "You can only delete your own comments" });
     }
 
     await db.query(
@@ -685,26 +594,20 @@ router.delete("/:id", verifyToken, async (req, res) => {
       [commentId]
     );
 
-    return res.json({ message: "Comment deleted successfully" });
-  } catch (error) {
-    return res.status(500).json({ error: "Failed to delete comment" });
-  }
-});
+    return { message: "Comment deleted successfully" };
+  });
+}
 
-// Toggle status an/hien comment
-router.put("/:id/toggle-status", verifyToken, isAdmin, async (req, res) => {
-  try {
-    const commentId = Number(req.params.id);
-    if (!Number.isInteger(commentId)) {
-      return res.status(400).json({ error: "Invalid comment ID" });
-    }
+function toggleStatus(rawId) {
+  return guard({ error: "Failed to toggle comment status" }, async () => {
+    const commentId = requireInteger(rawId, "Invalid comment ID");
 
     const { rows: comments } = await db.query(
       "SELECT comment_status FROM comment WHERE comment_id = $1",
       [commentId]
     );
     if (!comments.length) {
-      return res.status(404).json({ error: "Comment not found" });
+      throw new HttpError(404, { error: "Comment not found" });
     }
 
     const currentStatus = Number(comments[0].comment_status || 0);
@@ -715,14 +618,23 @@ router.put("/:id/toggle-status", verifyToken, isAdmin, async (req, res) => {
       [newStatus, commentId]
     );
 
-    return res.json({
+    return {
       message: "Comment status updated",
       comment_id: commentId,
       status: newStatus,
-    });
-  } catch (error) {
-    return res.status(500).json({ error: "Failed to toggle comment status" });
-  }
-});
+    };
+  });
+}
 
-module.exports = router;
+module.exports = {
+  list,
+  listForAdmin,
+  moderate,
+  getById,
+  listByProduct,
+  listByUser,
+  create,
+  update,
+  remove,
+  toggleStatus,
+};
