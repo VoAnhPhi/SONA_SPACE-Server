@@ -142,7 +142,6 @@ SONA_SPACE-Server/
 ├── config/
 ├── db/
 │   ├── init/
-│   ├── furnitown.sql
 │   └── transaction.js
 ├── middleware/
 ├── routes/

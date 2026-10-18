@@ -16,7 +16,6 @@ const SCAN_TARGETS = [
   "routes",
   "services",
   "chatbotSocket.js",
-  "chatbotSocket-gemini.js",
   "chatbotSocket-gemini-25-pro.js",
 ];
 
