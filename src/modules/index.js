@@ -43,7 +43,7 @@ const mounts = [
   },
   { path: "/api/typeNotify", router: require("../../routes/typenotify") },
   { path: "/api/attribute", router: require("./categories/attributes.routes") },
-  { path: "/api/events", router: require("../../routes/events") },
+  { path: "/api/events", router: require("./events/events.routes") },
   { path: "/api/chat", router: require("../../routes/chat") },
   { path: "/api/contact-forms", router: require("../../routes/contactForms") },
 ];
