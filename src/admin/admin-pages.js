@@ -1,0 +1,68 @@
+"use strict";
+
+const { isAdmin } = require("../shared/middleware/auth");
+const orderPages = require("./order-pages");
+
+// Every admin screen, in the order Express must see them (paths match case-insensitively, so an
+// earlier page wins over a later redirect). A page is rendered inside layouts/dashboard; `locals`
+// adds per-request values for the template. Order detail and invoice carry their own handler.
+const pages = [
+  { path: "/", view: "dashboard/index", title: "Sona Space - Dashboard" },
+  { path: "/contact-forms-design", view: "dashboard/contact/contactformdesign", title: "Sona Space - Contact Forms Design" },
+  { path: "/contact-forms-design/:id", view: "dashboard/contact/contactformdetail", title: "Sona Space - Contact Forms Design" },
+  { path: "/material", view: "dashboard/material/material", title: "Sona Space - Quản lý Sản phẩm" },
+  { path: "/material/add", view: "dashboard/material/add", title: "Sona Space - Quản lý Sản phẩm" },
+  { path: "/material/edit/:slug", view: "dashboard/material/edit", title: "Sona Space - Quản lý Sản phẩm", locals: (req) => ({ productId: req.params.slug }) },
+  { path: "/products", view: "dashboard/products/products", title: "Sona Space - Quản lý Sản phẩm" },
+  { path: "/products/add", view: "dashboard/products/add", title: "Sona Space - Thêm Sản phẩm mới" },
+  { path: "/products/edit/:slug", view: "dashboard/products/edit", title: "Sona Space - Chỉnh sửa Sản phẩm", locals: (req) => ({ productId: req.params.slug }) },
+  { path: "/colors", view: "dashboard/colors/colors", title: "Sona Space - Quản lý Sản phẩm" },
+  { path: "/colors/add", view: "dashboard/colors/add", title: "Sona Space - Thêm Sản phẩm mới" },
+  { path: "/colors/edit/:slug", view: "dashboard/colors/edit", title: "Sona Space - Chỉnh sửa Sản phẩm", locals: (req) => ({ productId: req.params.slug }) },
+  { path: "/events", view: "dashboard/events/events", title: "Sona Space - Quản lý Sản phẩm" },
+  { path: "/events/add", view: "dashboard/events/add", title: "Sona Space - Thêm Sản phẩm mới" },
+  { path: "/events/edit/:slug", view: "dashboard/events/edit", title: "Sona Space - Chỉnh sửa Sản phẩm", locals: (req) => ({ productId: req.params.slug }) },
+  { path: "/comment", view: "dashboard/comment/comment", title: "Sona Space - Quản lý Sản phẩm" },
+  { path: "/comment/add", view: "dashboard/comment/add", title: "Sona Space - Thêm Sản phẩm mới" },
+  { path: "/comment/edit/:slug", view: "dashboard/comment/edit", title: "Sona Space - Chỉnh sửa Sản phẩm", locals: (req) => ({ productId: req.params.slug }) },
+  { path: "/categories", view: "dashboard/category/categories", title: "Sona Space - Product Categories" },
+  { path: "/addcategories", view: "dashboard/category/addcategories", title: "Sona Space - Thêm Danh mục" },
+  { path: "/editcategories/:slug", view: "dashboard/category/editcategories", title: "Sona Space - Chỉnh sửa Danh mục" },
+  { path: "/room", view: "dashboard/room/room", title: "Sona Space - Quản lý Phòng" },
+  { path: "/addroom", view: "dashboard/room/addroom", title: "Sona Space - Quản lý Phòng" },
+  { path: "/editroom/:slug", view: "dashboard/room/editroom", title: "Sona Space - Chỉnh sửa Phòng" },
+  { path: "/orders", view: "dashboard/orders/orders", title: "Orders Management" },
+  { path: "/notify", view: "dashboard/notify/notify", title: "Orders Management" },
+  { path: "/notify/addNotify", view: "dashboard/notify/addNotify", title: "Orders Management" },
+  { path: "/typeNotify", view: "dashboard/typeNotify/typeNotify", title: "Orders Management" },
+  { path: "/typeNotify/addtypeNotify", view: "dashboard/typeNotify/addtypeNotify", title: "Sona Space - Quản lý kiểu thông báo" },
+  { path: "/typeNotify/edittypeNotify/:id", view: "dashboard/typeNotify/edittypeNotify", title: "Sona Space - Chỉnh sửa kỉểu thông báo" },
+  { path: "/voucher", view: "dashboard/voucher/voucher", title: "Orders Management" },
+  { path: "/voucher/addvoucher", view: "dashboard/voucher/addvoucher", title: "Orders Management" },
+  { path: "/voucher/editvoucher/:id", view: "dashboard/voucher/editvoucher", title: "Orders Management" },
+  { path: "/orders/view/:id", redirectTo: (req) => `/dashboard/orders/detail/${req.params.id}` },
+  { path: "/orders/detail/:id", middleware: [isAdmin], handler: orderPages.detail },
+  { path: "/orders/invoice/:id", handler: orderPages.invoice },
+  { path: "/users", view: "dashboard/users/users", title: "Users Management" },
+  { path: "/users/edit", view: "dashboard/users/edit", title: "Sona Space - Chỉnh sửa thông tin người dùng" },
+  { path: "/news", view: "dashboard/news/news", title: "News Management" },
+  { path: "/news/addnews", view: "dashboard/news/addnews", title: "Sona Space - Quản lý tin tức" },
+  { path: "/news/editnews/:slug", view: "dashboard/news/editnews", title: "Sona Space - Chỉnh sửa tin tức", locals: (req) => ({ productId: req.params.slug }) },
+  { path: "/Categorynews", view: "dashboard/Categorynews/Categorynews", title: "Sona Space - Danh mục tin tức" },
+  { path: "/Categorynews/addcategorynews", view: "dashboard/Categorynews/addcategorynews", title: "Sona Space - Quản lý tin tức" },
+  { path: "/Categorynews/editcategorynews/:slug", view: "dashboard/Categorynews/editcategorynews", title: "Sona Space - Chỉnh sửa tin tức", locals: (req) => ({ productId: req.params.slug }) },
+  { path: "/settings", view: "dashboard/settings", title: "Settings" },
+  { path: "/profile", view: "dashboard/profile", title: "Admin Profile" },
+  { path: "/accounts", redirectTo: () => "/dashboard/users" },
+  { path: "/staff", redirectTo: () => "/dashboard/users" },
+  { path: "/categories/add", redirectTo: () => "/dashboard/addcategories" },
+  { path: "/categories/edit/:slug", redirectTo: (req) => `/dashboard/editcategories/${req.params.slug}` },
+  { path: "/notifications/type-list", redirectTo: () => "/dashboard/typeNotify" },
+  { path: "/typeNotify/edittypenotify/:id", redirectTo: (req) => `/dashboard/typeNotify/edittypeNotify/${req.params.id}` },
+  { path: "/banners", view: "dashboard/banner/banners", title: "Sona Space - Quản lý Banner" },
+  { path: "/banners/add", view: "dashboard/banner/add", title: "Sona Space - Thêm Banner mới" },
+  { path: "/banners/edit/:id", view: "dashboard/banner/edit", title: "Sona Space - Chỉnh sửa Banner", locals: (req) => ({ bannerId: req.params.id }) },
+  { path: "/chatbot", view: "dashboard/context/context", title: "Sona Space - Chat bot" },
+];
+
+module.exports = { pages };

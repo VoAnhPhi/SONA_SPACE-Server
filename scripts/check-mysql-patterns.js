@@ -10,11 +10,6 @@ const SCAN_TARGETS = [
   "src",
   "db",
   "migrations",
-  "models",
-  "routes",
-  "services",
-  "chatbotSocket.js",
-  "chatbotSocket-gemini-25-pro.js",
 ];
 
 const ALLOWED_EXT = new Set([".js", ".cjs", ".mjs", ".ts", ".sql"]);

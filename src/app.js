@@ -19,7 +19,7 @@ app.locals.startTime = new Date();
 app.locals.corsOrigin = config.corsOrigin;
 
 // Set up view engine
-app.set("views", path.join(ROOT, "views"));
+app.set("views", path.join(__dirname, "admin", "views"));
 app.set("view engine", "ejs");
 
 // Configure express-ejs-layouts
@@ -52,13 +52,6 @@ app.get("/health", function (req, res) {
 app.use("/tom-select", express.static(path.join(ROOT, "node_modules", "tom-select")));
 app.use("/tinymce", express.static(path.join(ROOT, "node_modules", "tinymce")));
 app.use("/dayjs", express.static(path.join(ROOT, "node_modules", "dayjs")));
-
-// Base routes
-app.get("/", (req, res) => {
-  res.render("index", {
-    title: "Sona Space - Admin Login",
-  });
-});
 
 // API and admin routes
 mountModules(app);

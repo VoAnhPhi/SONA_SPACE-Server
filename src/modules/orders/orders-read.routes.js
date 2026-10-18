@@ -3,6 +3,8 @@
 const router = require("express").Router();
 const { verifyToken, isAdmin, optionalAuth } = require("../../shared/middleware/auth");
 const db = require("../../config/database");
+const asyncHandler = require("../../shared/http/async-handler");
+const { getOrderDetail } = require("./order-detail.service");
 const { ORDER_STATUS_KEY_TO_CODE, toLegacyOrderStatus } = require("./order-status.constants");
 
 /**
@@ -579,124 +581,15 @@ router.get("/", verifyToken, isAdmin, async (req, res) => {
   }
 });
 
-router.get("/:id", verifyToken, async (req, res) => {
-  try {
-    const orderId = Number(req.params.id);
+router.get("/:id", verifyToken, asyncHandler(async (req, res) => {
+  const orderId = Number(req.params.id);
 
-    if (Number.isNaN(orderId)) {
-      return res.status(400).json({ error: "Invalid order ID" });
-    }
-
-    const { rows: orderRows } = await db.query(
-      `
-      SELECT
-        o.*,
-        o.order_final_total AS order_total_final,
-        o.order_shipping_fee AS shipping_fee,
-        o.order_name AS order_name_new,
-        o.order_email AS order_email_new,
-        o.order_address AS order_address_new,
-        o.order_phone AS order_number2,
-        u.user_gmail AS user_email,
-        u.user_name AS user_name,
-        u.user_number AS user_phone,
-        p.payment_method AS payment_method,
-        p.payment_status AS payment_status,
-        p.payment_transaction_id AS payment_transaction_code,
-        p.updated_at AS payment_paid_at
-      FROM orders o
-      LEFT JOIN "user" u ON o.user_id = u.user_id
-      LEFT JOIN payments p ON o.payment_id = p.payment_id
-      WHERE o.order_id = $1
-      `,
-      [orderId]
-    );
-
-    if (!orderRows.length) {
-      return res.status(404).json({ error: "Order not found" });
-    }
-
-    const order = orderRows[0];
-
-    order.payment = [
-      {
-        method: order.payment_method,
-        status: order.payment_status,
-        transaction_code: order.payment_transaction_code,
-        paid_at: order.payment_paid_at,
-      },
-    ];
-    delete order.payment_method;
-    delete order.payment_status;
-    delete order.payment_transaction_code;
-    delete order.payment_paid_at;
-
-    if (req.user.role !== "admin" && req.user.id !== order.user_id) {
-      return res
-        .status(403)
-        .json({ error: "You do not have permission to view this order" });
-    }
-
-    const { rows: orderItems } = await db.query(
-      `
-      SELECT
-        oi.*,
-        oi.price AS product_price,
-        p.product_name,
-        p.product_image,
-        p.product_slug,
-        vp.variant_product_price,
-        vp.variant_product_price_sale,
-        vp.variant_product_list_image,
-        vp.color_id AS variant_color_id,
-        c.color_name,
-        c.color_code AS color_hex,
-        cat.category_name AS category,
-        (
-          SELECT COUNT(*)
-          FROM comment cmt
-          INNER JOIN order_items oi2 ON cmt.order_item_id = oi2.order_item_id
-          INNER JOIN variant_product vp2 ON oi2.variant_id = vp2.variant_id
-          WHERE vp2.product_id = p.product_id
-        ) AS comment_count,
-        (
-          SELECT AVG(cmt.comment_rating)
-          FROM comment cmt
-          INNER JOIN order_items oi2 ON cmt.order_item_id = oi2.order_item_id
-          INNER JOIN variant_product vp2 ON oi2.variant_id = vp2.variant_id
-          WHERE vp2.product_id = p.product_id
-        ) AS average_rating
-      FROM order_items oi
-      LEFT JOIN variant_product vp ON oi.variant_id = vp.variant_id
-      LEFT JOIN product p ON vp.product_id = p.product_id
-      LEFT JOIN color c ON vp.color_id = c.color_id
-      LEFT JOIN category cat ON p.category_id = cat.category_id
-      WHERE oi.order_id = $1
-      `,
-      [orderId]
-    );
-    order.items = orderItems;
-
-    const { rows: statusLogs } = await db.query(
-      `
-      SELECT osl.*
-      FROM order_status_log osl
-      WHERE osl.order_id = $1
-      ORDER BY osl.created_at ASC
-      `,
-      [orderId]
-    );
-    order.status_logs = statusLogs;
-    order.current_status = toLegacyOrderStatus(order.order_status);
-
-    return res.json(order);
-  } catch (error) {
-    console.error("Error fetching order:", error);
-    return res
-      .status(500)
-      .json({ error: "Failed to fetch order", details: error.message });
+  if (Number.isNaN(orderId)) {
+    return res.status(400).json({ error: "Invalid order ID" });
   }
-});
+
+  res.json(await getOrderDetail(orderId, req.user));
+}));
 
 
 /**

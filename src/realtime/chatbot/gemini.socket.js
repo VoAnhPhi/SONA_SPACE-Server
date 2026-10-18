@@ -1,8 +1,9 @@
 // attachChatbotSocketGemini25.js
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { v4: uuidv4 } = require("uuid");
-const db = require("./src/config/database");
-require("./src/config/env");
+require("../../config/env");
+
+const { getSystemPrompt } = require("./system-prompt");
 
 const MAX_TURNS = Number(process.env.MAX_TURNS || 12);
 const MAX_IMAGE_MB = Number(process.env.MAX_IMAGE_MB || 5);
@@ -16,23 +17,6 @@ const KEEPALIVE_MS = Number(process.env.KEEPALIVE_MS || 2000);
 module.exports = function attachChatbotSocketGemini25(io) {
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-  async function getSystemPrompt() {
-    try {
-      const { rows } = await db.query(`
-        SELECT content
-        FROM chatbot_context
-        WHERE is_active = 1
-        ORDER BY updated_at DESC, id DESC
-        LIMIT 1
-      `);
-      return (
-        rows?.[0]?.content ||
-        "Bạn là trợ lý AI thân thiện, trả lời ngắn gọn, hữu ích cho khách truy cập website."
-      );
-    } catch {
-      return "Bạn là trợ lý AI thân thiện, trả lời ngắn gọn, hữu ích cho khách truy cập website.";
-    }
-  }
 
   function trimHistory(history) {
     if (!Array.isArray(history)) return [];

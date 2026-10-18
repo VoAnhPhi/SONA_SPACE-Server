@@ -32,13 +32,7 @@ const io = new Server(server, {
   maxHttpBufferSize: 20 * 1024 * 1024 // 20MB
 });
 
-// SOCKET.IO dùng cho chat bot OpenAI (namespace mặc định)
-const chatbotSocket = require("../chatbotSocket");
-chatbotSocket(io);
-
-// SOCKET.IO dùng cho Gemini 2.5 Pro chat bot với namespace riêng
-const chatbotSocketGemini25 = require("../chatbotSocket-gemini-25-pro");
-chatbotSocketGemini25(io);
+require("../src/realtime")(io);
 
 /**
  * Listen on provided port, on all network interfaces.

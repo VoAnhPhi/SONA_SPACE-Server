@@ -1,6 +1,7 @@
 // SOCKET.IO dùng cho chat bot (multimodal: text + image)
 const OpenAI = require("openai").default; // CommonJS default export
-const db = require("./src/config/database");
+
+const { getSystemPrompt } = require("./system-prompt");
 
 const MAX_TURNS = 6; // số lượt hội thoại gần nhất giữ lại
 const MAX_IMAGE_SIZE_MB = 5;
@@ -48,24 +49,6 @@ module.exports = function attachChatbotSocket(io) {
     chatHistories[socketId] = keep;
   }
 
-  // ---- get system prompt từ DB ----
-  async function getSystemPrompt() {
-    try {
-      const { rows } = await db.query(`
-        SELECT content
-        FROM chatbot_context
-        WHERE is_active = 1
-        ORDER BY updated_at DESC, id DESC
-        LIMIT 1
-      `);
-      return (
-        rows?.[0]?.content ||
-        "Bạn là trợ lý AI thân thiện, trả lời ngắn gọn, hữu ích cho khách truy cập website."
-      );
-    } catch {
-      return "Bạn là trợ lý AI thân thiện, trả lời ngắn gọn, hữu ích cho khách truy cập website.";
-    }
-  }
 
   // ---- main socket handler ----
   io.on("connection", (socket) => {

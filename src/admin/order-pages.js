@@ -1,327 +1,26 @@
-const express = require("express");
-const router = express.Router();
-const authMiddleware = require("../src/shared/middleware/auth");
-const { isAdmin } = require("../src/shared/middleware/auth");
+"use strict";
 
-// Middleware to check if user is admin
-// Removed duplicate isAdmin middleware
+const db = require("../config/database");
+const { getOrderDetail } = require("../modules/orders/order-detail.service");
 
-// Middleware để kiểm tra xác thực cho dashboard
-const checkAuth = (req, res, next) => {
-  // Lấy token từ cookie hoặc header Authorization
-  const token =
-    req.cookies.token ||
-    (req.headers.authorization && req.headers.authorization.split(" ")[1]);
-
-  if (!token) {
-    return res.redirect("/");
-  }
-
+// The pages used to read the order over HTTP, so dates arrived as ISO strings; the JSON round trip
+// keeps the templates seeing exactly that shape.
+async function loadOrder(orderId, user, purpose) {
   try {
-    // Xác thực token và gọi middleware tiếp theo
-    authMiddleware.verifyToken(req, res, (err) => {
-      if (err) {
-        return res.redirect("/");
-      }
-      isAdmin(req, res, next);
-    });
-  } catch (error) {
-    return res.redirect("/");
+    return JSON.parse(JSON.stringify(await getOrderDetail(Number(orderId), user)));
+  } catch (loadError) {
+    console.log(`Order service failed${purpose}, falling back to direct DB query:`, loadError.message);
+    return null;
   }
-};
+}
 
-// Apply authentication middleware to all dashboard routes
-router.use(checkAuth);
-
-// Dashboard home
-router.get("/", (req, res) => {
-  res.render("dashboard/index", {
-    title: "Sona Space - Dashboard",
-    layout: "layouts/dashboard",
-  });
-});
-
-// Dashboard home
-router.get("/contact-forms-design", (req, res) => {
-  res.render("dashboard/contact/contactformdesign", {
-    title: "Sona Space - Contact Forms Design",
-    layout: "layouts/dashboard",
-  });
-});
-
-router.get("/contact-forms-design/:id", (req, res) => {
-  res.render("dashboard/contact/contactformdetail", {
-    title: "Sona Space - Contact Forms Design",
-    layout: "layouts/dashboard",
-  });
-});
-router.get("/material", (req, res) => {
-  res.render("dashboard/material/material", {
-    title: "Sona Space - Quản lý Sản phẩm",
-    layout: "layouts/dashboard",
-  });
-});
-router.get("/material/add", (req, res) => {
-  res.render("dashboard/material/add", {
-    title: "Sona Space - Quản lý Sản phẩm",
-    layout: "layouts/dashboard",
-  });
-});
-router.get("/material/edit/:slug", (req, res) => {
-  // NO /dashboard HERE, because app.use('/dashboard', ...) already handles it
-  res.render("dashboard/material/edit", {
-    title: "Sona Space - Quản lý Sản phẩm",
-    layout: "layouts/dashboard",
-    productId: req.params.slug, // Pass the slug to the view
-  });
-});
-// Products management
-router.get("/products", (req, res) => {
-  res.render("dashboard/products/products", {
-    title: "Sona Space - Quản lý Sản phẩm",
-    layout: "layouts/dashboard",
-  });
-});
-
-// Add product
-router.get("/products/add", (req, res) => {
-  res.render("dashboard/products/add", {
-    title: "Sona Space - Thêm Sản phẩm mới",
-    layout: "layouts/dashboard",
-  });
-});
-
-// Edit product
-router.get("/products/edit/:slug", (req, res) => {
-  res.render("dashboard/products/edit", {
-    title: "Sona Space - Chỉnh sửa Sản phẩm",
-    layout: "layouts/dashboard",
-    productId: req.params.slug,
-  });
-});
-
-// Products management
-router.get("/colors", (req, res) => {
-  res.render("dashboard/colors/colors", {
-    title: "Sona Space - Quản lý Sản phẩm",
-    layout: "layouts/dashboard",
-  });
-});
-
-// Add product
-router.get("/colors/add", (req, res) => {
-  res.render("dashboard/colors/add", {
-    title: "Sona Space - Thêm Sản phẩm mới",
-    layout: "layouts/dashboard",
-  });
-});
-
-// Edit product
-router.get("/colors/edit/:slug", (req, res) => {
-  res.render("dashboard/colors/edit", {
-    title: "Sona Space - Chỉnh sửa Sản phẩm",
-    layout: "layouts/dashboard",
-    productId: req.params.slug,
-  });
-});
-// Products management
-router.get("/events", (req, res) => {
-  res.render("dashboard/events/events", {
-    title: "Sona Space - Quản lý Sản phẩm",
-    layout: "layouts/dashboard",
-  });
-});
-
-// Add product
-router.get("/events/add", (req, res) => {
-  res.render("dashboard/events/add", {
-    title: "Sona Space - Thêm Sản phẩm mới",
-    layout: "layouts/dashboard",
-  });
-});
-
-// Edit product
-router.get("/events/edit/:slug", (req, res) => {
-  res.render("dashboard/events/edit", {
-    title: "Sona Space - Chỉnh sửa Sản phẩm",
-    layout: "layouts/dashboard",
-    productId: req.params.slug,
-  });
-});
-
-// Products management
-router.get("/comment", (req, res) => {
-  res.render("dashboard/comment/comment", {
-    title: "Sona Space - Quản lý Sản phẩm",
-    layout: "layouts/dashboard",
-  });
-});
-
-// Add product
-router.get("/comment/add", (req, res) => {
-  res.render("dashboard/comment/add", {
-    title: "Sona Space - Thêm Sản phẩm mới",
-    layout: "layouts/dashboard",
-  });
-});
-
-// Edit product
-router.get("/comment/edit/:slug", (req, res) => {
-  res.render("dashboard/comment/edit", {
-    title: "Sona Space - Chỉnh sửa Sản phẩm",
-    layout: "layouts/dashboard",
-    productId: req.params.slug,
-  });
-});
-// Categories management
-router.get("/categories", (req, res) => {
-  res.render("dashboard/category/categories", {
-    title: "Sona Space - Product Categories",
-    layout: "layouts/dashboard",
-  });
-});
-
-// Add category
-router.get("/addcategories", (req, res) => {
-  res.render("dashboard/category/addcategories", {
-    title: "Sona Space - Thêm Danh mục",
-    layout: "layouts/dashboard",
-  });
-});
-
-// Edit category
-router.get("/editcategories/:slug", (req, res) => {
-  res.render("dashboard/category/editcategories", {
-    title: "Sona Space - Chỉnh sửa Danh mục",
-    layout: "layouts/dashboard",
-  });
-});
-
-// Room management
-router.get("/room", (req, res) => {
-  res.render("dashboard/room/room", {
-    title: "Sona Space - Quản lý Phòng",
-    layout: "layouts/dashboard",
-  });
-});
-
-router.get("/addroom", (req, res) => {
-  res.render("dashboard/room/addroom", {
-    title: "Sona Space - Quản lý Phòng",
-    layout: "layouts/dashboard",
-  });
-});
-
-router.get("/editroom/:slug", (req, res) => {
-  res.render("dashboard/room/editroom", {
-    title: "Sona Space - Chỉnh sửa Phòng",
-    layout: "layouts/dashboard",
-  });
-});
-
-// Orders management
-router.get("/orders", (req, res) => {
-  res.render("dashboard/orders/orders", {
-    title: "Orders Management",
-    layout: "layouts/dashboard",
-  });
-});
-
-// notify management
-router.get("/notify", (req, res) => {
-  res.render("dashboard/notify/notify", {
-    title: "Orders Management",
-    layout: "layouts/dashboard",
-  });
-});
-router.get("/notify/addNotify", (req, res) => {
-  res.render("dashboard/notify/addNotify", {
-    title: "Orders Management",
-    layout: "layouts/dashboard",
-  });
-});
-
-// notify type management
-router.get("/typeNotify", (req, res) => {
-  res.render("dashboard/typeNotify/typeNotify", {
-    title: "Orders Management",
-    layout: "layouts/dashboard",
-  });
-});
-
-router.get("/typeNotify/addtypeNotify", (req, res) => {
-  res.render("dashboard/typeNotify/addtypeNotify", {
-    title: "Sona Space - Quản lý kiểu thông báo",
-    layout: "layouts/dashboard",
-  });
-});
-
-router.get("/typeNotify/edittypeNotify/:id", (req, res) => {
-  res.render("dashboard/typeNotify/edittypeNotify", {
-    title: "Sona Space - Chỉnh sửa kỉểu thông báo",
-    layout: "layouts/dashboard",
-  });
-});
-
-// voucher management
-router.get("/voucher", (req, res) => {
-  res.render("dashboard/voucher/voucher", {
-    title: "Orders Management",
-    layout: "layouts/dashboard",
-  });
-});
-router.get("/voucher/addvoucher", (req, res) => {
-  res.render("dashboard/voucher/addvoucher", {
-    title: "Orders Management",
-    layout: "layouts/dashboard",
-  });
-});
-router.get("/voucher/editvoucher/:id", (req, res) => {
-  res.render("dashboard/voucher/editvoucher", {
-    title: "Orders Management",
-    layout: "layouts/dashboard",
-  });
-});
-
-// View specific order
-router.get("/orders/view/:id", (req, res) => {
-  res.redirect(`/dashboard/orders/detail/${req.params.id}`);
-});
-
-// Route for order details
-router.get("/orders/detail/:id", isAdmin, async (req, res) => {
+async function detail(req, res) {
   try {
     const orderId = req.params.id;
-    let order = null;
-    
-    try {
-      // Try to fetch from API first
-      const port = process.env.PORT || 3501;
-      const apiUrl = `http://localhost:${port}/api/orders/${orderId}`;
-      
-      const response = await fetch(apiUrl, {
-        headers: {
-          Authorization: `Bearer ${req.cookies.token}`,
-        },
-        timeout: 5000 // 5 second timeout
-      });
+    let order = await loadOrder(orderId, req.user, "");
 
-      if (response.ok) {
-        const orderData = await response.json();
-        order = orderData.data || orderData;
-        
-        // If there's returnInfo in the API response, add it to the order
-        if (orderData.returnInfo) {
-          order.returnInfo = orderData.returnInfo;
-        }
-      }
-    } catch (fetchError) {
-      console.log("API fetch failed, falling back to direct DB query:", fetchError.message);
-    }
-    
-    // If API fetch failed, get data directly from database
+    // If the order could not be loaded, read it directly from the database
     if (!order) {
-      const db = require("../src/config/database");
       const { rows: orderRows } = await db.query(
         `SELECT o.*, u.user_name as customer_name, u.user_gmail as customer_email, u.user_number as customer_phone
          FROM orders o 
@@ -343,7 +42,6 @@ router.get("/orders/detail/:id", isAdmin, async (req, res) => {
 
     // If items are missing, fetch them directly from the database
     if (!order.items || order.items.length === 0) {
-      const db = require("../src/config/database");
       const { rows: items } = await db.query(
         `
         SELECT oi.*, p.product_name, p.product_image, c.color_code AS color_hex
@@ -361,8 +59,7 @@ router.get("/orders/detail/:id", isAdmin, async (req, res) => {
     // Fetch payment method from payments table if not available in order
     if (!order.payment || !order.payment.length) {
       try {
-        const db = require("../src/config/database");
-        const { rows: paymentRows } = await db.query(
+          const { rows: paymentRows } = await db.query(
           `
           SELECT
             p.payment_method AS method,
@@ -625,37 +322,15 @@ router.get("/orders/detail/:id", isAdmin, async (req, res) => {
       layout: "layouts/dashboard",
     });
   }
-});
+}
 
-// View order invoice
-router.get("/orders/invoice/:id", async (req, res) => {
+async function invoice(req, res) {
   try {
     const orderId = req.params.id;
-    let order = null;
-    
-    try {
-      // Try to fetch from API first
-      const port = process.env.PORT || 3501;
-      const apiUrl = `http://localhost:${port}/api/orders/${orderId}`;
-      
-      const response = await fetch(apiUrl, {
-        headers: {
-          Authorization: `Bearer ${req.cookies.token}`,
-        },
-        timeout: 5000 // 5 second timeout
-      });
+    let order = await loadOrder(orderId, req.user, " for invoice");
 
-      if (response.ok) {
-        const orderData = await response.json();
-        order = orderData.data || orderData;
-      }
-    } catch (fetchError) {
-      console.log("API fetch failed for invoice, falling back to direct DB query:", fetchError.message);
-    }
-    
-    // If API fetch failed, get data directly from database
+    // If the order could not be loaded, read it directly from the database
     if (!order) {
-      const db = require("../src/config/database");
       const { rows: orderRows } = await db.query(
         `SELECT o.*, u.user_name as customer_name, u.user_gmail as customer_email, u.user_number as customer_phone
          FROM orders o 
@@ -677,7 +352,6 @@ router.get("/orders/invoice/:id", async (req, res) => {
 
     // If items are missing, fetch them directly from the database
     if (!order.items || order.items.length === 0) {
-      const db = require("../src/config/database");
       const { rows: items } = await db.query(
         `
         SELECT oi.*, p.product_name, vp.variant_product_price, vp.variant_product_price_sale
@@ -782,137 +456,6 @@ router.get("/orders/invoice/:id", async (req, res) => {
   } catch (error) {
     res.status(500).send("Đã xảy ra lỗi khi tải hóa đơn: " + error.message);
   }
-});
+}
 
-// Users management
-router.get("/users", (req, res) => {
-  res.render("dashboard/users/users", {
-    title: "Users Management",
-    layout: "layouts/dashboard",
-  });
-});
-router.get("/users/edit", (req, res) => {
-  res.render("dashboard/users/edit", {
-    title: "Sona Space - Chỉnh sửa thông tin người dùng",
-    layout: "layouts/dashboard",
-  });
-});
-
-// News management
-router.get("/news", (req, res) => {
-  res.render("dashboard/news/news", {
-    title: "News Management",
-    layout: "layouts/dashboard",
-  });
-});
-
-router.get("/news/addnews", (req, res) => {
-  res.render("dashboard/news/addnews", {
-    title: "Sona Space - Quản lý tin tức",
-    layout: "layouts/dashboard",
-  });
-});
-
-router.get("/news/editnews/:slug", (req, res) => {
-  res.render("dashboard/news/editnews", {
-    title: "Sona Space - Chỉnh sửa tin tức",
-    layout: "layouts/dashboard",
-    productId: req.params.slug,
-  });
-});
-// News Categories management
-router.get("/Categorynews", (req, res) => {
-  res.render("dashboard/Categorynews/Categorynews", {
-    title: "Sona Space - Danh mục tin tức",
-    layout: "layouts/dashboard",
-  });
-});
-router.get("/Categorynews/addcategorynews", (req, res) => {
-  res.render("dashboard/Categorynews/addcategorynews", {
-    title: "Sona Space - Quản lý tin tức",
-    layout: "layouts/dashboard",
-  });
-});
-
-router.get("/Categorynews/editcategorynews/:slug", (req, res) => {
-  res.render("dashboard/Categorynews/editcategorynews", {
-    title: "Sona Space - Chỉnh sửa tin tức",
-    layout: "layouts/dashboard",
-    productId: req.params.slug,
-  });
-});
-// Settings
-router.get("/settings", (req, res) => {
-  res.render("dashboard/settings", {
-    title: "Settings",
-    layout: "layouts/dashboard",
-  });
-});
-
-// Profile
-router.get("/profile", (req, res) => {
-  res.render("dashboard/profile", {
-    title: "Admin Profile",
-    layout: "layouts/dashboard",
-  });
-});
-
-// Compatibility routes for legacy dashboard URLs still referenced by old UI scripts
-router.get("/accounts", (req, res) => {
-  return res.redirect("/dashboard/users");
-});
-
-router.get("/staff", (req, res) => {
-  return res.redirect("/dashboard/users");
-});
-
-router.get("/categories/add", (req, res) => {
-  return res.redirect("/dashboard/addcategories");
-});
-
-router.get("/categories/edit/:slug", (req, res) => {
-  return res.redirect(`/dashboard/editcategories/${req.params.slug}`);
-});
-
-router.get("/notifications/type-list", (req, res) => {
-  return res.redirect("/dashboard/typeNotify");
-});
-
-router.get("/typeNotify/edittypenotify/:id", (req, res) => {
-  return res.redirect(`/dashboard/typeNotify/edittypeNotify/${req.params.id}`);
-});
-
-// Banner management
-router.get("/banners", (req, res) => {
-  res.render("dashboard/banner/banners", {
-    title: "Sona Space - Quản lý Banner",
-    layout: "layouts/dashboard",
-  });
-});
-
-// Add banner
-router.get("/banners/add", (req, res) => {
-  res.render("dashboard/banner/add", {
-    title: "Sona Space - Thêm Banner mới",
-    layout: "layouts/dashboard",
-  });
-});
-
-// Edit banner
-router.get("/banners/edit/:id", (req, res) => {
-  res.render("dashboard/banner/edit", {
-    title: "Sona Space - Chỉnh sửa Banner",
-    layout: "layouts/dashboard",
-    bannerId: req.params.id,
-  });
-});
-
-// chat bot
-router.get("/chatbot", (req, res) => {
-  res.render("dashboard/context/context", {
-    title: "Sona Space - Chat bot",
-    layout: "layouts/dashboard",
-  });
-});
-
-module.exports = router;
+module.exports = { detail, invoice };

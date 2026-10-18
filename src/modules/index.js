@@ -5,10 +5,10 @@ const { verifyToken } = require("../shared/middleware/auth");
 const { markDeprecatedRoute } = require("../shared/middleware/deprecate-route");
 
 // Mount table, in the order Express must see it. `use` lists middleware applied to the whole mount.
-// Routers still live in routes/ until each one moves into its own module (see the migration plan).
 const mounts = [
+  { path: "/", router: require("../admin/login.routes") },
   { path: "/api/auth", router: require("./auth/auth.routes") },
-  { path: "/dashboard", router: require("../../routes/dashboard") },
+  { path: "/dashboard", router: require("../admin/admin.routes") },
 
   // public
   { path: "/api/products", router: require("./products/products.routes") },
