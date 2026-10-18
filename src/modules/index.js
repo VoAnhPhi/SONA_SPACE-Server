@@ -11,9 +11,9 @@ const mounts = [
   { path: "/dashboard", router: require("../../routes/dashboard") },
 
   // public
-  { path: "/api/products", router: require("../../routes/products") },
+  { path: "/api/products", router: require("./products/products.routes") },
   { path: "/api/categories", router: require("./categories/categories.routes") },
-  { path: "/api/variants", router: require("../../routes/variants") },
+  { path: "/api/variants", router: require("./products/variants.routes") },
   { path: "/api/rooms", router: require("./rooms/rooms.routes") },
   { path: "/api/news", router: require("./news/news.routes") },
   { path: "/api/news-categories", router: require("./news/news-categories.routes") },
