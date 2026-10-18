@@ -1,14 +1,12 @@
-const express = require("express");
-const router = express.Router();
-const db = require("../src/config/database");
-const { withTransaction } = require("../src/shared/db/transaction");
-const { verifyToken, isAdmin } = require("../src/shared/middleware/auth");
+"use strict";
 
-function parseId(value) {
-  const id = Number.parseInt(value, 10);
-  return Number.isInteger(id) && id > 0 ? id : null;
-}
+const db = require("../../config/database");
+const { withTransaction } = require("../../shared/db/transaction");
+const HttpError = require("../../shared/http/http-error");
+const guard = require("../../shared/http/guard");
+const { parsePositiveId } = require("../../shared/utils/parse-id");
 
+/** Picks the notification type for a code, falling back to system, promotion, then order. */
 async function resolveNotificationTypeId(client, typeCode) {
   const normalized = String(typeCode || "").trim().toLowerCase();
   const preferredCodes = normalized
@@ -45,6 +43,7 @@ async function resolveNotificationTypeId(client, typeCode) {
   };
 }
 
+/** Delivers a notification to many users in one statement; existing deliveries are kept. */
 async function insertUserNotifications(client, notificationId, userIds) {
   if (!userIds.length) return;
 
@@ -66,8 +65,8 @@ async function insertUserNotifications(client, notificationId, userIds) {
   );
 }
 
-router.get("/", verifyToken, isAdmin, async (req, res) => {
-  try {
+function listAll() {
+  return guard({ error: "Loi server khi lay danh sach thong bao" }, async () => {
     const { rows } = await db.query(`
       SELECT
         n.id,
@@ -85,14 +84,13 @@ router.get("/", verifyToken, isAdmin, async (req, res) => {
       ORDER BY n.created_at DESC
     `);
 
-    res.status(200).json(rows);
-  } catch (error) {
-    res.status(500).json({ error: "Loi server khi lay danh sach thong bao" });
-  }
-});
+    return rows;
+  });
+}
 
-router.get("/admin", verifyToken, isAdmin, async (req, res) => {
-  try {
+/** The 50 most recent notifications for the admin bell. */
+function listRecent() {
+  return guard({ error: "Internal Server Error" }, async () => {
     const { rows } = await db.query(`
       SELECT
         n.id,
@@ -110,18 +108,17 @@ router.get("/admin", verifyToken, isAdmin, async (req, res) => {
       LIMIT 50
     `);
 
-    res.json(rows);
-  } catch (error) {
-    res.status(500).json({ error: "Internal Server Error" });
-  }
-});
+    return rows;
+  });
+}
 
-router.post("/", verifyToken, async (req, res) => {
-  try {
-    const { title, content, type, image, status = 1 } = req.body;
+/** Creates a notification; with status 1 it is delivered to every active user. */
+function create(body, sender) {
+  return guard({ error: "Loi may chu khi tao thong bao" }, async () => {
+    const { title, content, type, image, status = 1 } = body;
 
     if (!title || !content) {
-      return res.status(400).json({ error: "Tieu de va noi dung la bat buoc" });
+      throw new HttpError(400, { error: "Tieu de va noi dung la bat buoc" });
     }
 
     const result = await withTransaction(async (client) => {
@@ -133,7 +130,7 @@ router.post("/", verifyToken, async (req, res) => {
         VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
         RETURNING id
         `,
-        [typeId, title, content, image || null, req.user.id]
+        [typeId, title, content, image || null, sender.id]
       );
 
       const notificationId = createdRows[0].id;
@@ -156,24 +153,22 @@ router.post("/", verifyToken, async (req, res) => {
       return { notificationId, typeCode };
     });
 
-    res.status(201).json({
+    return {
       message: "Tao thong bao thanh cong",
       id: result.notificationId,
       type_code: result.typeCode,
       status: Number(status) === 1 ? 1 : 0,
-    });
-  } catch (error) {
-    res.status(500).json({ error: "Loi may chu khi tao thong bao" });
-  }
-});
+    };
+  });
+}
 
-router.delete("/:id", verifyToken, isAdmin, async (req, res) => {
-  const id = parseId(req.params.id);
+function remove(rawId) {
+  const id = parsePositiveId(rawId);
   if (!id) {
-    return res.status(400).json({ error: "ID khong hop le" });
+    throw new HttpError(400, { error: "ID khong hop le" });
   }
 
-  try {
+  return guard({ error: "Loi server khi xoa thong bao" }, async () => {
     const deleted = await withTransaction(async (client) => {
       await client.query("DELETE FROM user_notifications WHERE notification_id = $1", [id]);
       const { rowCount } = await client.query("DELETE FROM notifications WHERE id = $1", [id]);
@@ -181,13 +176,18 @@ router.delete("/:id", verifyToken, isAdmin, async (req, res) => {
     });
 
     if (deleted === 0) {
-      return res.status(404).json({ error: "Khong tim thay thong bao de xoa" });
+      throw new HttpError(404, { error: "Khong tim thay thong bao de xoa" });
     }
 
-    res.json({ message: "Xoa thong bao thanh cong" });
-  } catch (error) {
-    res.status(500).json({ error: "Loi server khi xoa thong bao" });
-  }
-});
+    return { message: "Xoa thong bao thanh cong" };
+  });
+}
 
-module.exports = router;
+module.exports = {
+  listAll,
+  listRecent,
+  create,
+  remove,
+  resolveNotificationTypeId,
+  insertUserNotifications,
+};
