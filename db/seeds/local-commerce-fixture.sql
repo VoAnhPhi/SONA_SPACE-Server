@@ -46,3 +46,10 @@ BEGIN
   INSERT INTO order_items (order_id, variant_id, quantity, price)
   VALUES (v_order_id, v_variant_id, 1, v_price);
 END $$;
+
+-- Dedicated account for the client Playwright suite (SONA_SPACE-Client/tests/e2e).
+-- Login: qa.e2e@sonaspace.test / QaE2e#2026!   (local databases only)
+INSERT INTO "user" (user_name, user_gmail, user_number, user_password, user_address, user_role, user_email_active, user_verified_at)
+SELECT 'QA E2E', 'qa.e2e@sonaspace.test', '0900000001', '$2a$10$FdUOWSxTyesJerCUYBqlxO4LogalzPSfxxTgEL9.lLl05Gk73i/Ly',
+       '1 Duong QA, Phuong 1, Quan 1, TP.HCM', 'user', 1, NOW()
+WHERE NOT EXISTS (SELECT 1 FROM "user" WHERE user_gmail = 'qa.e2e@sonaspace.test');

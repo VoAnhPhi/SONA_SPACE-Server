@@ -127,8 +127,10 @@ async function main() {
 
   console.log(`Admin render: ${routes.length - failures.length}/${routes.length} checks clean`);
   failures.forEach((line) => console.log(`FAIL ${line}`));
+  process.exitCode = failures.length ? 1 : 0;
   await db.end?.();
-  process.exit(failures.length ? 1 : 0);
+  // No process.exit(): on Windows it can trip a libuv assertion and turn a green run into exit 127.
+  // The pool is closed above and the exit code is already set, so the process ends by itself.
 }
 
 main().catch((error) => {

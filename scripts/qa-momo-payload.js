@@ -79,10 +79,13 @@ async function main() {
     body: JSON.stringify({ ...requestBody, fromRedirect: false }),
   });
 
+  await withoutRedirect.text(); // drain the body so no response stays open
+
   Date.now = realNow;
   Math.random = realRandom;
   axios.post = originalPost;
-  server.close();
+  server.closeAllConnections?.();
+  await new Promise((resolve) => server.close(resolve));
 
   check("response is 200 with payUrl", response.status === 200 && json?.payUrl === "https://pay.example.test/momo-checkout", `${response.status} ${JSON.stringify(json)}`);
   check("MOMO without fromRedirect is rejected with 400", withoutRedirect.status === 400, String(withoutRedirect.status));
@@ -147,8 +150,10 @@ async function main() {
   }
 
   console.log(`MoMo payload: ${failures.length ? `${failures.length} FAILED` : "all checks passed"}`);
+  process.exitCode = failures.length ? 1 : 0;
   await db.end?.();
-  process.exit(failures.length ? 1 : 0);
+  // No process.exit(): on Windows it can trip a libuv assertion and turn a green run into exit 127.
+  // The pool is closed above and the exit code is already set, so the process ends by itself.
 }
 
 main().catch((error) => {
