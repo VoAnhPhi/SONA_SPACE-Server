@@ -29,7 +29,7 @@ const mounts = [
   { path: "/api/orders", router: require("../../routes/orders") },
   { path: "/api/order-status", use: [verifyToken], router: require("../../routes/orderStatus") },
   { path: "/api/payments", use: [verifyToken], router: require("../../routes/payments") },
-  { path: "/api/couponcodes", use: [verifyToken], router: require("../../routes/couponcodes") },
+  { path: "/api/couponcodes", use: [verifyToken], router: require("./coupons/coupons.routes") },
   { path: "/api/color", router: require("./colors/colors.routes") },
   { path: "/api/upload", router: require("../../routes/upload") },
   { path: "/api/banners", router: require("./banners/banners.routes") },

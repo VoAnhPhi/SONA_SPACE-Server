@@ -1,8 +1,9 @@
-const express = require("express");
-const router = express.Router();
-const db = require("../src/config/database");
-const { withTransaction } = require("../src/shared/db/transaction");
-const { verifyToken, isAdmin } = require("../src/shared/middleware/auth");
+"use strict";
+
+const db = require("../../config/database");
+const { withTransaction } = require("../../shared/db/transaction");
+const HttpError = require("../../shared/http/http-error");
+const guard = require("../../shared/http/guard");
 
 const couponSelect = (alias = "c") => `
   ${alias}.couponcode_id,
@@ -57,6 +58,7 @@ function addUpdate(updates, values, column, value) {
   updates.push(`${column} = $${values.length}`);
 }
 
+/** Resolve the audience of a coupon: "all", "new_users" (joined in the last 30 days) or explicit ids. */
 async function getAffectedUserIds(client, userIds) {
   if (userIds === "new_users" || userIds === "new_users_30d") {
     const { rows } = await client.query(`
@@ -140,8 +142,14 @@ function formatCurrency(value) {
   return `${Number(value || 0).toLocaleString("vi-VN")}d`;
 }
 
-router.get("/", verifyToken, isAdmin, async (req, res) => {
-  try {
+function requireCouponId(rawId) {
+  const id = Number(rawId);
+  if (isNaN(id)) throw new HttpError(400, { error: "Invalid coupon ID" });
+  return id;
+}
+
+function listAll() {
+  return guard("Failed to fetch coupon codes", async () => {
     const { rows: coupons } = await db.query(`
       SELECT ${couponSelect("c")}
       FROM couponcode c
@@ -149,74 +157,13 @@ router.get("/", verifyToken, isAdmin, async (req, res) => {
       ORDER BY c.couponcode_id DESC
     `);
 
-    res.json(coupons);
-  } catch (error) {
-    res.status(500).json({ error: "Failed to fetch coupon codes" });
-  }
-});
+    return coupons;
+  });
+}
 
-router.get("/notification", verifyToken, async (req, res) => {
-  try {
-    const userId = req.user.id;
-
-    const { rows } = await db.query(
-      `
-      SELECT
-        un.id AS user_notification_id,
-        un.notification_id,
-        n.title,
-        n.link,
-        n.message,
-        n.created_at,
-        un.is_read,
-        un.read_at
-      FROM user_notifications un
-      JOIN notifications n ON un.notification_id = n.id
-      WHERE un.user_id = $1 AND un.is_deleted = 0
-      ORDER BY n.created_at DESC
-    `,
-      [userId]
-    );
-
-    res.status(200).json(rows);
-  } catch (error) {
-    res.status(500).json({ error: "Failed to fetch notifications" });
-  }
-});
-
-router.patch("/notification/read/:id", verifyToken, async (req, res) => {
-  const userId = req.user.id;
-  const notificationId = Number(req.params.id);
-
-  if (isNaN(notificationId)) {
-    return res.status(400).json({ message: "Invalid notification ID" });
-  }
-
-  try {
-    const { rows } = await db.query(
-      "SELECT id FROM user_notifications WHERE user_id = $1 AND notification_id = $2",
-      [userId, notificationId]
-    );
-
-    if (rows.length === 0) {
-      return res.status(404).json({ message: "Notification not found" });
-    }
-
-    await db.query(
-      "UPDATE user_notifications SET is_read = 1, read_at = NOW() WHERE user_id = $1 AND notification_id = $2",
-      [userId, notificationId]
-    );
-
-    res.status(200).json({ message: "Notification marked as read" });
-  } catch (error) {
-    res.status(500).json({ message: "Failed to mark notification as read" });
-  }
-});
-
-router.get("/user-has-coupon", verifyToken, async (req, res) => {
-  try {
-    const userId = req.user.id;
-
+/** Coupons the user was given and has not used yet. */
+function listUserCoupons(userId) {
+  return guard("Failed to fetch user coupons", async () => {
     const { rows } = await db.query(
       `
       SELECT
@@ -236,16 +183,13 @@ router.get("/user-has-coupon", verifyToken, async (req, res) => {
       [userId]
     );
 
-    res.json(rows);
-  } catch (error) {
-    res.status(500).json({ error: "Failed to fetch user coupons" });
-  }
-});
+    return rows;
+  });
+}
 
-router.get("/codes", verifyToken, async (req, res) => {
-  try {
-    const userId = req.user.id;
-
+/** Coupons the user can use: public ones plus the ones assigned to them. */
+function listAvailableForUser(userId) {
+  return guard("Failed to fetch coupons", async () => {
     const { rows } = await db.query(
       `
       SELECT
@@ -273,14 +217,13 @@ router.get("/codes", verifyToken, async (req, res) => {
       [userId, userId]
     );
 
-    res.json(rows);
-  } catch (error) {
-    res.status(500).json({ error: "Failed to fetch coupons" });
-  }
-});
+    return rows;
+  });
+}
 
-router.get("/admin", verifyToken, async (req, res) => {
-  try {
+/** Unexpired coupons, whatever the audience. Named "admin" for historical reasons; any signed-in user may call it. */
+function listUnexpired() {
+  return guard("Failed to fetch public coupons", async () => {
     const { rows } = await db.query(`
       SELECT ${couponSelectWithIdAlias("c")}
       FROM couponcode c
@@ -289,16 +232,13 @@ router.get("/admin", verifyToken, async (req, res) => {
       ORDER BY c.couponcode_id DESC
     `);
 
-    res.json(rows);
-  } catch (error) {
-    res.status(500).json({ error: "Failed to fetch public coupons" });
-  }
-});
+    return rows;
+  });
+}
 
-router.get("/userCoupon", verifyToken, async (req, res) => {
-  try {
-    const userId = req.user.id;
-
+/** Coupons assigned to this user (used or not). */
+function listAssignedToUser(userId) {
+  return guard("Failed to fetch user vouchers", async () => {
     const { rows } = await db.query(
       `
       SELECT
@@ -317,16 +257,14 @@ router.get("/userCoupon", verifyToken, async (req, res) => {
       [userId]
     );
 
-    res.json(rows);
-  } catch (error) {
-    res.status(500).json({ error: "Failed to fetch user vouchers" });
-  }
-});
+    return rows;
+  });
+}
 
-router.get("/:id", verifyToken, isAdmin, async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    if (isNaN(id)) return res.status(400).json({ error: "Invalid coupon ID" });
+/** One coupon with its audience: null (everyone), "new_users" or the explicit user ids. */
+function getById(rawId) {
+  return guard("Failed to fetch coupon code", async () => {
+    const id = requireCouponId(rawId);
 
     const { rows } = await db.query(
       `
@@ -338,7 +276,7 @@ router.get("/:id", verifyToken, isAdmin, async (req, res) => {
       [id]
     );
 
-    if (!rows.length) return res.status(404).json({ error: "Coupon code not found" });
+    if (!rows.length) throw new HttpError(404, { error: "Coupon code not found" });
 
     const coupon = rows[0];
 
@@ -369,36 +307,13 @@ router.get("/:id", verifyToken, isAdmin, async (req, res) => {
       user_ids = allUserIds;
     }
 
-    res.json({ ...coupon, user_ids });
-  } catch (error) {
-    res.status(500).json({ error: "Failed to fetch coupon code" });
-  }
-});
+    return { ...coupon, user_ids };
+  });
+}
 
-router.post("/mark-all-read", verifyToken, async (req, res) => {
-  const userId = req.user.id;
-
-  try {
-    const { rowCount } = await db.query(
-      "UPDATE user_notifications SET is_read = 1, read_at = NOW() WHERE user_id = $1 AND is_read = 0",
-      [userId]
-    );
-
-    res.json({
-      success: true,
-      message: "All notifications marked as read",
-      updatedRows: rowCount,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Server error",
-    });
-  }
-});
-
-router.post("/", verifyToken, isAdmin, async (req, res) => {
-  try {
+/** Creates a coupon, assigns it to its audience and notifies them, all in one transaction. */
+function create(body, admin) {
+  return guard("Failed to create coupon", async () => {
     const {
       code,
       title,
@@ -411,41 +326,41 @@ router.post("/", verifyToken, isAdmin, async (req, res) => {
       discount_type,
       status,
       user_ids,
-    } = req.body;
+    } = body;
 
-    if (!code) return res.status(400).json({ error: "Coupon code is required" });
-    if (!value_price) return res.status(400).json({ error: "Discount value is required" });
-    if (!exp_time) return res.status(400).json({ error: "Expiration date is required" });
-    if (!discount_type) return res.status(400).json({ error: "Discount type is required" });
-    if (status === undefined) return res.status(400).json({ error: "Status is required" });
+    if (!code) throw new HttpError(400, { error: "Coupon code is required" });
+    if (!value_price) throw new HttpError(400, { error: "Discount value is required" });
+    if (!exp_time) throw new HttpError(400, { error: "Expiration date is required" });
+    if (!discount_type) throw new HttpError(400, { error: "Discount type is required" });
+    if (status === undefined) throw new HttpError(400, { error: "Status is required" });
     if (!/^[A-Z0-9_]{3,20}$/.test(code)) {
-      return res.status(400).json({ error: "Invalid coupon code format" });
+      throw new HttpError(400, { error: "Invalid coupon code format" });
     }
 
     if (used !== undefined && (isNaN(used) || Number(used) <= 0)) {
-      return res.status(400).json({ error: "Invalid usage quantity" });
+      throw new HttpError(400, { error: "Invalid usage quantity" });
     }
 
     if (isNaN(value_price) || Number(value_price) <= 0) {
-      return res.status(400).json({ error: "Invalid discount value" });
+      throw new HttpError(400, { error: "Invalid discount value" });
     }
 
     if (discount_type === "percentage" && (Number(value_price) < 1 || Number(value_price) > 100)) {
-      return res.status(400).json({ error: "Percentage discount must be between 1 and 100" });
+      throw new HttpError(400, { error: "Percentage discount must be between 1 and 100" });
     }
 
     if (discount_type === "fixed" && Number(value_price) < 1) {
-      return res.status(400).json({ error: "Fixed discount must be greater than 0" });
+      throw new HttpError(400, { error: "Fixed discount must be greater than 0" });
     }
 
     if (min_order !== null && min_order !== undefined && (isNaN(min_order) || Number(min_order) < 0)) {
-      return res.status(400).json({ error: "Invalid minimum order value" });
+      throw new HttpError(400, { error: "Invalid minimum order value" });
     }
 
     const startDate = start_time ? new Date(start_time) : new Date();
     const endDate = new Date(exp_time);
     if (endDate <= startDate) {
-      return res.status(400).json({ error: "Expiration date must be after start date" });
+      throw new HttpError(400, { error: "Expiration date must be after start date" });
     }
 
     const newCoupon = await withTransaction(async (client) => {
@@ -454,9 +369,7 @@ router.post("/", verifyToken, isAdmin, async (req, res) => {
         [code]
       );
       if (existingCoupons.length > 0) {
-        const error = new Error("Coupon code already exists");
-        error.status = 400;
-        throw error;
+        throw new HttpError(400, { error: "Coupon code already exists" });
       }
 
       const discount = normalizeDiscount(discount_type, value_price);
@@ -494,7 +407,6 @@ router.post("/", verifyToken, isAdmin, async (req, res) => {
       const couponId = createdCoupons[0].couponcode_id;
       const affectedUsers = await getAffectedUserIds(client, user_ids);
 
-      let notificationId = null;
       if (affectedUsers.length > 0) {
         await insertRows(
           client,
@@ -517,9 +429,9 @@ router.post("/", verifyToken, isAdmin, async (req, res) => {
             VALUES ($1, $2, $3, $4)
             RETURNING id
           `,
-            [notificationTypeId, notificationTitle, notificationMessage, req.user.id]
+            [notificationTypeId, notificationTitle, notificationMessage, admin.id]
           );
-          notificationId = notifications[0].id;
+          const notificationId = notifications[0].id;
 
           await insertRows(
             client,
@@ -533,20 +445,18 @@ router.post("/", verifyToken, isAdmin, async (req, res) => {
       return fetchCouponById(client, couponId);
     });
 
-    res.status(201).json({ message: "Coupon created successfully", coupon: newCoupon });
-  } catch (error) {
-    res.status(error.status || 500).json({ error: error.status ? error.message : "Failed to create coupon" });
-  }
-});
+    return { message: "Coupon created successfully", coupon: newCoupon };
+  });
+}
 
-router.put("/:id/status", verifyToken, isAdmin, async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    const { status } = req.body;
+function updateStatus(rawId, body) {
+  return guard("Failed to update coupon status", async () => {
+    const id = Number(rawId);
+    const { status } = body;
 
-    if (isNaN(id)) return res.status(400).json({ error: "Invalid coupon ID" });
+    if (isNaN(id)) throw new HttpError(400, { error: "Invalid coupon ID" });
     if (![0, 1].includes(Number(status))) {
-      return res.status(400).json({ error: "Invalid status" });
+      throw new HttpError(400, { error: "Invalid status" });
     }
 
     const { rowCount } = await db.query(
@@ -554,18 +464,15 @@ router.put("/:id/status", verifyToken, isAdmin, async (req, res) => {
       [Number(status), id]
     );
 
-    if (rowCount === 0) return res.status(404).json({ error: "Coupon not found" });
+    if (rowCount === 0) throw new HttpError(404, { error: "Coupon not found" });
 
-    res.json({ message: "Coupon status updated successfully", newStatus: Number(status) });
-  } catch (error) {
-    res.status(500).json({ error: "Failed to update coupon status" });
-  }
-});
+    return { message: "Coupon status updated successfully", newStatus: Number(status) };
+  });
+}
 
-router.put("/:id", verifyToken, isAdmin, async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    if (isNaN(id)) return res.status(400).json({ error: "Invalid coupon ID" });
+function update(rawId, body) {
+  return guard("Failed to update coupon", async () => {
+    const id = requireCouponId(rawId);
 
     const {
       code,
@@ -579,14 +486,12 @@ router.put("/:id", verifyToken, isAdmin, async (req, res) => {
       discount_type,
       status,
       user_ids,
-    } = req.body;
+    } = body;
 
     const updatedCoupon = await withTransaction(async (client) => {
       const existingCoupon = await fetchCouponById(client, id);
       if (!existingCoupon) {
-        const error = new Error("Coupon not found");
-        error.status = 404;
-        throw error;
+        throw new HttpError(404, { error: "Coupon not found" });
       }
 
       const updates = [];
@@ -598,9 +503,7 @@ router.put("/:id", verifyToken, isAdmin, async (req, res) => {
           [code, id]
         );
         if (duplicate.length > 0) {
-          const error = new Error("Coupon code already exists");
-          error.status = 400;
-          throw error;
+          throw new HttpError(400, { error: "Coupon code already exists" });
         }
         addUpdate(updates, values, "couponcode_code", code);
       }
@@ -613,9 +516,7 @@ router.put("/:id", verifyToken, isAdmin, async (req, res) => {
         const nextType = discount_type || existingCoupon.discount_type;
         const nextValue = value_price !== undefined ? value_price : existingCoupon.value_price;
         if (isNaN(nextValue) || Number(nextValue) <= 0) {
-          const error = new Error("Invalid discount value");
-          error.status = 400;
-          throw error;
+          throw new HttpError(400, { error: "Invalid discount value" });
         }
         const discount = normalizeDiscount(nextType, nextValue);
         addUpdate(updates, values, "couponcode_type", discount.couponcode_type);
@@ -631,9 +532,7 @@ router.put("/:id", verifyToken, isAdmin, async (req, res) => {
         const endDate = new Date(exp_time);
         const startDate = start_time ? new Date(start_time) : new Date(existingCoupon.start_time);
         if (startDate && endDate <= startDate) {
-          const error = new Error("Expiration date must be after start date");
-          error.status = 400;
-          throw error;
+          throw new HttpError(400, { error: "Expiration date must be after start date" });
         }
         addUpdate(updates, values, "couponcode_endday", endDate);
       }
@@ -664,71 +563,37 @@ router.put("/:id", verifyToken, isAdmin, async (req, res) => {
       return fetchCouponById(client, id);
     });
 
-    res.json({ message: "Coupon updated successfully", coupon: updatedCoupon });
-  } catch (error) {
-    res.status(error.status || 500).json({ error: error.status ? error.message : "Failed to update coupon" });
-  }
-});
+    return { message: "Coupon updated successfully", coupon: updatedCoupon };
+  });
+}
 
-router.delete("/notification/:id", verifyToken, async (req, res) => {
-  try {
-    const notificationId = Number(req.params.id);
-    const userId = req.user.id;
-
-    if (isNaN(notificationId)) {
-      return res.status(400).json({ error: "Invalid notification ID" });
-    }
-
-    const { rowCount } = await db.query(
-      `
-      UPDATE user_notifications
-      SET is_deleted = 1
-      WHERE notification_id = $1 AND user_id = $2
-    `,
-      [notificationId, userId]
-    );
-
-    if (rowCount === 0) {
-      return res.status(404).json({ error: "Notification not found" });
-    }
-
-    res.json({ message: "Notification deleted successfully" });
-  } catch (error) {
-    res.status(500).json({ error: "Failed to delete notification" });
-  }
-});
-
-router.delete("/:id", verifyToken, isAdmin, async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    if (isNaN(id)) return res.status(400).json({ error: "Invalid coupon ID" });
+function remove(rawId) {
+  return guard("Failed to delete coupon", async () => {
+    const id = requireCouponId(rawId);
 
     await withTransaction(async (client) => {
       const existingCoupon = await fetchCouponById(client, id);
       if (!existingCoupon) {
-        const error = new Error("Coupon not found");
-        error.status = 404;
-        throw error;
+        throw new HttpError(404, { error: "Coupon not found" });
       }
 
       await client.query("DELETE FROM user_has_coupon WHERE couponcode_id = $1", [id]);
       await client.query("DELETE FROM couponcode WHERE couponcode_id = $1", [id]);
     });
 
-    res.json({ message: "Coupon deleted successfully" });
-  } catch (error) {
-    res.status(error.status || 500).json({ error: error.status ? error.message : "Failed to delete coupon" });
-  }
-});
+    return { message: "Coupon deleted successfully" };
+  });
+}
 
-router.post("/validate", verifyToken, async (req, res) => {
-  try {
-    const { code, cart_total } = req.body;
+/** Checks a code against the cart and the user, and computes the discount. */
+function validate(body, user) {
+  return guard("Failed to validate coupon", async () => {
+    const { code, cart_total } = body;
     const cartTotal = Number(cart_total);
 
-    if (!code) return res.status(400).json({ error: "Coupon code is required" });
+    if (!code) throw new HttpError(400, { error: "Coupon code is required" });
     if (isNaN(cartTotal) || cartTotal < 0) {
-      return res.status(400).json({ error: "Invalid cart total" });
+      throw new HttpError(400, { error: "Invalid cart total" });
     }
 
     const { rows: coupons } = await db.query(
@@ -742,7 +607,7 @@ router.post("/validate", verifyToken, async (req, res) => {
     );
 
     if (coupons.length === 0) {
-      return res.status(404).json({ error: "Coupon code not found" });
+      throw new HttpError(404, { error: "Coupon code not found" });
     }
 
     const coupon = coupons[0];
@@ -751,11 +616,11 @@ router.post("/validate", verifyToken, async (req, res) => {
     const expTime = coupon.exp_time ? new Date(coupon.exp_time) : null;
 
     if (Number(coupon.status) === 0) {
-      return res.status(400).json({ error: "Coupon is inactive" });
+      throw new HttpError(400, { error: "Coupon is inactive" });
     }
 
     if (Number(coupon.used) <= 0) {
-      return res.status(400).json({ error: "Coupon usage limit reached" });
+      throw new HttpError(400, { error: "Coupon usage limit reached" });
     }
 
     const { rows: allowedUsers } = await db.query(
@@ -767,28 +632,28 @@ router.post("/validate", verifyToken, async (req, res) => {
     if (!isGlobal) {
       const { rows: userAllowed } = await db.query(
         "SELECT status FROM user_has_coupon WHERE couponcode_id = $1 AND user_id = $2",
-        [coupon.couponcode_id, req.user.id]
+        [coupon.couponcode_id, user.id]
       );
 
       if (userAllowed.length === 0) {
-        return res.status(403).json({ error: "You do not have this coupon" });
+        throw new HttpError(403, { error: "You do not have this coupon" });
       }
 
       if (Number(userAllowed[0].status) === 1) {
-        return res.status(400).json({ error: "You already used this coupon" });
+        throw new HttpError(400, { error: "You already used this coupon" });
       }
     }
 
     if (startTime && startTime > now) {
-      return res.status(400).json({ error: "Coupon is not active yet" });
+      throw new HttpError(400, { error: "Coupon is not active yet" });
     }
 
     if (expTime && expTime < now) {
-      return res.status(400).json({ error: "Coupon expired" });
+      throw new HttpError(400, { error: "Coupon expired" });
     }
 
     if (coupon.min_order !== null && cartTotal < Number(coupon.min_order)) {
-      return res.status(400).json({
+      throw new HttpError(400, {
         error: "Cart total does not meet minimum order requirement",
         min_purchase: coupon.min_order,
       });
@@ -805,7 +670,7 @@ router.post("/validate", verifyToken, async (req, res) => {
       discountAmount = Math.min(cartTotal, value);
     }
 
-    res.json({
+    return {
       valid: true,
       coupon: {
         couponcode_id: coupon.couponcode_id,
@@ -820,10 +685,20 @@ router.post("/validate", verifyToken, async (req, res) => {
         combinations: null,
         min_order: coupon.min_order,
       },
-    });
-  } catch (error) {
-    res.status(500).json({ error: "Failed to validate coupon" });
-  }
-});
+    };
+  });
+}
 
-module.exports = router;
+module.exports = {
+  listAll,
+  listUserCoupons,
+  listAvailableForUser,
+  listUnexpired,
+  listAssignedToUser,
+  getById,
+  create,
+  updateStatus,
+  update,
+  remove,
+  validate,
+};
