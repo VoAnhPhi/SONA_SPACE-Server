@@ -14,7 +14,7 @@ const mounts = [
   { path: "/api/products", router: require("../../routes/products") },
   { path: "/api/categories", router: require("./categories/categories.routes") },
   { path: "/api/variants", router: require("../../routes/variants") },
-  { path: "/api/rooms", router: require("../../routes/rooms") },
+  { path: "/api/rooms", router: require("./rooms/rooms.routes") },
   { path: "/api/news", router: require("../../routes/news") },
   { path: "/api/news-categories", router: require("../../routes/newsCategories") },
   { path: "/api/contact-form-design", router: require("../../routes/contactFormsDesign") },
