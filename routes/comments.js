@@ -1,8 +1,8 @@
 const express = require("express");
 const router = express.Router();
-const db = require("../config/database");
-const { verifyToken, isAdmin } = require("../middleware/auth");
-const { withTransaction } = require("../db/transaction");
+const db = require("../src/config/database");
+const { verifyToken, isAdmin } = require("../src/shared/middleware/auth");
+const { withTransaction } = require("../src/shared/db/transaction");
 
 const COMMENT_PRODUCT_JOINS = `
   LEFT JOIN order_items oi ON c.order_item_id = oi.order_item_id

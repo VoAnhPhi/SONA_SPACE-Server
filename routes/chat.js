@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
-const db = require("../config/database");
-const { verifyToken, isAdmin } = require("../middleware/auth");
+const db = require("../src/config/database");
+const { verifyToken, isAdmin } = require("../src/shared/middleware/auth");
 
 const DEFAULT_CONTEXT =
   "Ban la tro ly AI than thien, tra loi ngan gon va huu ich cho khach truy cap website.";

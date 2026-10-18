@@ -1,5 +1,5 @@
 // db/postgres.pool.js
-require("dotenv").config();
+require("./env");
 
 const { Pool } = require("pg");
 

@@ -1,7 +1,7 @@
 const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
 const { OAuth2Client } = require("google-auth-library");
-const db = require("../config/database");
+const db = require("../src/config/database");
 
 class GoogleAuthError extends Error {
 	constructor(status, code, message, cause) {

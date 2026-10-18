@@ -1,8 +1,8 @@
 const express = require("express");
 const router = express.Router();
-const db = require("../config/database");
-const { verifyToken, isAdmin } = require("../middleware/auth");
-const { sendEmail } = require("../services/mailService");
+const db = require("../src/config/database");
+const { verifyToken, isAdmin } = require("../src/shared/middleware/auth");
+const { sendEmail } = require("../src/shared/mail/design-contact.mail");
 
 const isStaffRole = (req) => req.user?.role?.toLowerCase?.() === "staff";
 

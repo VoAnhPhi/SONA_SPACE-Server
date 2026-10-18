@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
-const db = require("../config/database");
-const { verifyToken, isAdmin } = require("../middleware/auth");
+const db = require("../src/config/database");
+const { verifyToken, isAdmin } = require("../src/shared/middleware/auth");
 
 function getColorCode(body = {}) {
   return body.color_hex ?? body.color_code ?? null;

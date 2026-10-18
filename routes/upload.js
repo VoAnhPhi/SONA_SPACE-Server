@@ -1,8 +1,8 @@
 const express = require("express");
 const router = express.Router();
-const upload = require("../middleware/upload");
-const cloudinary = require("../config/cloudinary");
-const { verifyToken, isAdmin } = require("../middleware/auth");
+const upload = require("../src/shared/middleware/upload");
+const cloudinary = require("../src/config/cloudinary");
+const { verifyToken, isAdmin } = require("../src/shared/middleware/auth");
 
 function buildBase64Image(file) {
   return `data:${file.mimetype};base64,${file.buffer.toString("base64")}`;

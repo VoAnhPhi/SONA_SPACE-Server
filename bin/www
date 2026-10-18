@@ -4,12 +4,10 @@
  * Module dependencies.
  */
 
-var app = require("../app");
+var config = require("../src/config/env");
+config.assertRequired();
 
-if (!process.env.JWT_SECRET) {
-  console.error("JWT_SECRET is not set. Set it in the environment or .env before starting the server.");
-  process.exit(1);
-}
+var app = require("../src/app");
 var debug = require("debug")("fpoly-api:server");
 var http = require("http");
 
@@ -17,7 +15,7 @@ var http = require("http");
  * Get port from environment and store in Express.
  */
 
-var port = normalizePort(process.env.PORT || "3501");
+var port = normalizePort(config.port);
 app.set("port", port);
 console.log(`Server will run on port: ${port}`);
 
@@ -30,7 +28,7 @@ var server = http.createServer(app);
 // SOCKET.IO setup
 const { Server } = require("socket.io");
 const io = new Server(server, { 
-  cors: { origin: app.locals.corsOrigin },
+  cors: { origin: config.corsOrigin },
   maxHttpBufferSize: 20 * 1024 * 1024 // 20MB
 });
 

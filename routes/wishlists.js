@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
-const db = require("../config/database");
-const { verifyToken } = require("../middleware/auth");
+const db = require("../src/config/database");
+const { verifyToken } = require("../src/shared/middleware/auth");
 
 function parseId(value) {
   const parsed = Number.parseInt(value, 10);

@@ -1,8 +1,8 @@
 const express = require("express");
 const router = express.Router();
-const db = require("../config/database");
-const { withTransaction } = require("../db/transaction");
-const { verifyToken } = require("../middleware/auth");
+const db = require("../src/config/database");
+const { withTransaction } = require("../src/shared/db/transaction");
+const { verifyToken } = require("../src/shared/middleware/auth");
 
 const ORDER_STATUS = {
   CANCELLED: -1,

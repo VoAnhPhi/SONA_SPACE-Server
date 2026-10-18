@@ -1,10 +1,10 @@
 const express = require("express");
 const router = express.Router();
 const bcrypt = require("bcryptjs");
-const db = require("../config/database");
-const { generateToken, verifyToken } = require("../middleware/auth");
+const db = require("../src/config/database");
+const { generateToken, verifyToken } = require("../src/shared/middleware/auth");
 const jwt = require("jsonwebtoken");
-const { sendEmail } = require("../services/mailVerify");
+const { sendEmail } = require("../src/shared/mail/verification.mail");
 const { authenticateGoogleUser, GoogleAuthError } = require("../services/googleAuthService");
 
 const JWT_SECRET = process.env.JWT_SECRET;

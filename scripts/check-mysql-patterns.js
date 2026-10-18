@@ -7,10 +7,8 @@ const path = require("path");
 const ROOT = process.cwd();
 
 const SCAN_TARGETS = [
-  "app.js",
-  "config",
+  "src",
   "db",
-  "middleware",
   "migrations",
   "models",
   "routes",

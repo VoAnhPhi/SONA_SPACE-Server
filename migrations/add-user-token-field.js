@@ -3,7 +3,7 @@
  * Run: node migrations/add-user-token-field.js
  */
 
-const db = require("../config/database");
+const db = require("../src/config/database");
 
 async function columnExists(columnName) {
   const { rows } = await db.query(

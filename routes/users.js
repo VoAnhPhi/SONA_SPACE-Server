@@ -1,10 +1,10 @@
 const express = require("express");
 const router = express.Router();
 const bcrypt = require("bcryptjs");
-const db = require("../config/database");
-const { verifyToken, isAdmin, isAdminOnly } = require("../middleware/auth");
-const upload = require("../middleware/upload");
-const cloudinary = require("../config/cloudinary");
+const db = require("../src/config/database");
+const { verifyToken, isAdmin, isAdminOnly } = require("../src/shared/middleware/auth");
+const upload = require("../src/shared/middleware/upload");
+const cloudinary = require("../src/config/cloudinary");
 
 /**
  * @route   GET /api/users

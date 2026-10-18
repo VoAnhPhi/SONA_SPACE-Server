@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { sendEmailFromCustomer } = require("../services/mailContact");
+const { sendEmailFromCustomer } = require("../src/shared/mail/contact.mail");
 
 router.post("/", async (req, res) => {
   const { name, email, phone, message } = req.body;

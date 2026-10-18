@@ -1,6 +1,6 @@
 // SOCKET.IO dùng cho chat bot (multimodal: text + image)
 const OpenAI = require("openai").default; // CommonJS default export
-const db = require("./config/database");
+const db = require("./src/config/database");
 
 const MAX_TURNS = 6; // số lượt hội thoại gần nhất giữ lại
 const MAX_IMAGE_SIZE_MB = 5;

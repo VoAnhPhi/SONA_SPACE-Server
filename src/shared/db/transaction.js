@@ -1,6 +1,6 @@
 "use strict";
 
-const pool = require("../config/database");
+const pool = require("../../config/database");
 
 async function withTransaction(work) {
   const client = await pool.connect();

@@ -1,8 +1,8 @@
 const express = require("express");
 const router = express.Router();
-const authMiddleware = require("../middleware/auth");
+const authMiddleware = require("../src/shared/middleware/auth");
 const { route } = require("./upload");
-const { isAdmin } = require("../middleware/auth");
+const { isAdmin } = require("../src/shared/middleware/auth");
 
 // Middleware to check if user is admin
 // Removed duplicate isAdmin middleware
@@ -322,7 +322,7 @@ router.get("/orders/detail/:id", isAdmin, async (req, res) => {
     
     // If API fetch failed, get data directly from database
     if (!order) {
-      const db = require("../config/database");
+      const db = require("../src/config/database");
       const { rows: orderRows } = await db.query(
         `SELECT o.*, u.user_name as customer_name, u.user_gmail as customer_email, u.user_number as customer_phone
          FROM orders o 
@@ -344,7 +344,7 @@ router.get("/orders/detail/:id", isAdmin, async (req, res) => {
 
     // If items are missing, fetch them directly from the database
     if (!order.items || order.items.length === 0) {
-      const db = require("../config/database");
+      const db = require("../src/config/database");
       const { rows: items } = await db.query(
         `
         SELECT oi.*, p.product_name, p.product_image, c.color_code AS color_hex
@@ -362,7 +362,7 @@ router.get("/orders/detail/:id", isAdmin, async (req, res) => {
     // Fetch payment method from payments table if not available in order
     if (!order.payment || !order.payment.length) {
       try {
-        const db = require("../config/database");
+        const db = require("../src/config/database");
         const { rows: paymentRows } = await db.query(
           `
           SELECT
@@ -656,7 +656,7 @@ router.get("/orders/invoice/:id", async (req, res) => {
     
     // If API fetch failed, get data directly from database
     if (!order) {
-      const db = require("../config/database");
+      const db = require("../src/config/database");
       const { rows: orderRows } = await db.query(
         `SELECT o.*, u.user_name as customer_name, u.user_gmail as customer_email, u.user_number as customer_phone
          FROM orders o 
@@ -678,7 +678,7 @@ router.get("/orders/invoice/:id", async (req, res) => {
 
     // If items are missing, fetch them directly from the database
     if (!order.items || order.items.length === 0) {
-      const db = require("../config/database");
+      const db = require("../src/config/database");
       const { rows: items } = await db.query(
         `
         SELECT oi.*, p.product_name, vp.variant_product_price, vp.variant_product_price_sale

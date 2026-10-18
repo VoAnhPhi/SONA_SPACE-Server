@@ -13,8 +13,8 @@ const http = require("http");
 const jwt = require("jsonwebtoken");
 const axios = require("axios");
 
-const app = require("../app");
-const db = require("../config/database");
+const app = require("../src/app");
+const db = require("../src/config/database");
 
 const JWT_SECRET = process.env.JWT_SECRET;
 

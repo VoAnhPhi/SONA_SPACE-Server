@@ -3,8 +3,8 @@ const http = require("http");
 const path = require("path");
 const jwt = require("jsonwebtoken");
 
-const app = require("../app");
-const db = require("../config/database");
+const app = require("../src/app");
+const db = require("../src/config/database");
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const DASHBOARD_FILE = path.join(__dirname, "../routes/dashboard.js");

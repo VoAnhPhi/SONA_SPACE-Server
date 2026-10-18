@@ -1,10 +1,10 @@
 ﻿const express = require("express");
 const router = express.Router();
-const db = require("../config/database");
-const cloudinary = require("../config/cloudinary");
-const { verifyToken, isAdmin, optionalAuth } = require("../middleware/auth");
-const { withTransaction } = require("../db/transaction");
-const { markDeprecatedRoute } = require("../middleware/deprecateRoute");
+const db = require("../src/config/database");
+const cloudinary = require("../src/config/cloudinary");
+const { verifyToken, isAdmin, optionalAuth } = require("../src/shared/middleware/auth");
+const { withTransaction } = require("../src/shared/db/transaction");
+const { markDeprecatedRoute } = require("../src/shared/middleware/deprecate-route");
 const LIMIT_PER_PAGE = 8;
 const parseJsonArray = (value) => {
   if (Array.isArray(value)) return value;

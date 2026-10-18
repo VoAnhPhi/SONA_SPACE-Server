@@ -1,9 +1,9 @@
 const express = require("express");
 const router = express.Router();
-const db = require("../config/database");
-const { verifyToken, isAdmin } = require("../middleware/auth");
-const cloudinary = require("../config/cloudinary");
-const { markDeprecatedRoute } = require("../middleware/deprecateRoute");
+const db = require("../src/config/database");
+const { verifyToken, isAdmin } = require("../src/shared/middleware/auth");
+const cloudinary = require("../src/config/cloudinary");
+const { markDeprecatedRoute } = require("../src/shared/middleware/deprecate-route");
 
 function parseId(value) {
   const parsed = Number.parseInt(value, 10);

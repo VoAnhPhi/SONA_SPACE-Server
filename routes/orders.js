@@ -1,14 +1,14 @@
 ﻿const express = require("express");
 const router = express.Router();
-const db = require("../config/database");
-const { verifyToken, isAdmin, optionalAuth } = require("../middleware/auth");
+const db = require("../src/config/database");
+const { verifyToken, isAdmin, optionalAuth } = require("../src/shared/middleware/auth");
 const crypto = require("crypto");
-const upload = require("../middleware/upload");
-const cloudinary = require("../config/cloudinary");
-const { withTransaction } = require("../db/transaction");
+const upload = require("../src/shared/middleware/upload");
+const cloudinary = require("../src/config/cloudinary");
+const { withTransaction } = require("../src/shared/db/transaction");
 
 const axios = require("axios");
-const { sendEmail1 } = require("../services/mailService1");
+const { sendEmail1 } = require("../src/shared/mail/order.mail");
 const { VNPay, ignoreLogger, dateFormat } = require("vnpay");
 // Áp dụng middleware xác thực cho tất cả các route
 // router.use(verifyToken);

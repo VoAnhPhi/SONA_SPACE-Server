@@ -1,8 +1,8 @@
 // attachChatbotSocketGemini25.js
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { v4: uuidv4 } = require("uuid");
-const db = require("./config/database");
-require("dotenv").config();
+const db = require("./src/config/database");
+require("./src/config/env");
 
 const MAX_TURNS = Number(process.env.MAX_TURNS || 12);
 const MAX_IMAGE_MB = Number(process.env.MAX_IMAGE_MB || 5);

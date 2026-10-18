@@ -1,6 +1,6 @@
-require("dotenv").config();
+require("../../config/env");
 const jwt = require("jsonwebtoken");
-const db = require("../config/database");
+const db = require("../../config/database");
 
 const JWT_SECRET = process.env.JWT_SECRET;
 

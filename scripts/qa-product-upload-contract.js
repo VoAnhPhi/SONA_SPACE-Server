@@ -1,9 +1,9 @@
 const http = require("http");
 const jwt = require("jsonwebtoken");
 
-const app = require("../app");
-const cloudinary = require("../config/cloudinary");
-const db = require("../config/database");
+const app = require("../src/app");
+const cloudinary = require("../src/config/cloudinary");
+const db = require("../src/config/database");
 
 const JWT_SECRET = process.env.JWT_SECRET;
 

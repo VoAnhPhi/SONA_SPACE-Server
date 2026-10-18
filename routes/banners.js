@@ -1,10 +1,10 @@
 const express = require("express");
 const router = express.Router();
-const db = require("../config/database");
+const db = require("../src/config/database");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
-const { verifyToken, isAdmin } = require("../middleware/auth");
+const { verifyToken, isAdmin } = require("../src/shared/middleware/auth");
 
 const BANNER_UPLOAD_DIR = path.join(__dirname, "../public/uploads/banners");
 const PAGE_TYPES = [

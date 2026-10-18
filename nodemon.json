@@ -1,5 +1,5 @@
 {
-	"watch": ["bin", "routes", "views", "app.js", "public"],
+	"watch": ["bin", "src", "routes", "views", "public"],
 	"ext": "js,json,ejs,css",
 	"ignore": ["node_modules", ".git"],
 	"delay": "500",
