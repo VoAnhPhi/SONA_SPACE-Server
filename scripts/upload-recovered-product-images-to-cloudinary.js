@@ -1,8 +1,8 @@
 const fs = require("fs");
 const path = require("path");
 
-const cloudinary = require("../config/cloudinary");
-const db = require("../config/database");
+const cloudinary = require("../src/config/cloudinary");
+const db = require("../src/config/database");
 
 const DEFAULT_INPUT_MANIFEST = path.join(
   __dirname,

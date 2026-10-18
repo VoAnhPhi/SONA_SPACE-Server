@@ -1,10 +1,10 @@
 const http = require("http");
 const jwt = require("jsonwebtoken");
 
-const app = require("../app");
-const db = require("../config/database");
+const app = require("../src/app");
+const db = require("../src/config/database");
 
-const JWT_SECRET = process.env.JWT_SECRET || "furnitown-secret-key";
+const JWT_SECRET = process.env.JWT_SECRET;
 
 function signToken(user) {
   return jwt.sign({ id: user.user_id, role: user.user_role }, JWT_SECRET, {
@@ -277,11 +277,27 @@ async function main() {
       name: "GET /api/users/staff",
       method: "GET",
       path: "/api/users/staff",
+      token: "admin",
       expected: [200],
       validate: (body) => ({
         ok: Array.isArray(body?.users),
         message: "Expected staff users payload",
       }),
+    },
+    {
+      group: "users.js",
+      name: "GET /api/users/staff without token",
+      method: "GET",
+      path: "/api/users/staff",
+      expected: [401],
+    },
+    {
+      group: "users.js",
+      name: "GET /api/users/staff with non-admin token",
+      method: "GET",
+      path: "/api/users/staff",
+      token: "user",
+      expected: [403],
     },
     {
       group: "users.js",
@@ -593,13 +609,52 @@ async function main() {
       name: "GET /api/wishlists-id/:userId",
       method: "GET",
       path: `/api/wishlists-id/${fixtures.user.user_id}`,
+      token: "user",
       expected: [200],
       validate: (body) => ({
         ok:
           (Array.isArray(body?.wishlists) && typeof body?.wishlist_count === "number") ||
           (Array.isArray(body?.wishlists) && typeof body?.message === "string"),
-        message: "Expected public wishlist payload",
+        message: "Expected wishlist payload",
       }),
+    },
+    {
+      group: "wishlists-id.js",
+      name: "GET /api/wishlists-id/:userId without token",
+      method: "GET",
+      path: `/api/wishlists-id/${fixtures.user.user_id}`,
+      expected: [401],
+    },
+    {
+      group: "wishlists-id.js",
+      name: "GET /api/wishlists-id/:userId of another user",
+      method: "GET",
+      path: `/api/wishlists-id/${fixtures.admin.user_id}`,
+      token: "user",
+      expected: [403],
+    },
+    {
+      group: "orders-id.js",
+      name: "GET /api/orders-id/:userId without token",
+      method: "GET",
+      path: `/api/orders-id/${fixtures.user.user_id}`,
+      expected: [401],
+    },
+    {
+      group: "orders-id.js",
+      name: "GET /api/orders-id/:userId of another user",
+      method: "GET",
+      path: `/api/orders-id/${fixtures.admin.user_id}`,
+      token: "user",
+      expected: [403],
+    },
+    {
+      group: "orders-id.js",
+      name: "GET /api/orders-id/:userId own orders",
+      method: "GET",
+      path: `/api/orders-id/${fixtures.user.user_id}`,
+      token: "user",
+      expected: [200],
     },
     {
       group: "news.js",

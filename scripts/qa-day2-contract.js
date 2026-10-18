@@ -1,10 +1,10 @@
 const http = require("http");
 const jwt = require("jsonwebtoken");
 
-const app = require("../app");
-const db = require("../config/database");
+const app = require("../src/app");
+const db = require("../src/config/database");
 
-const JWT_SECRET = process.env.JWT_SECRET || "furnitown-secret-key";
+const JWT_SECRET = process.env.JWT_SECRET;
 
 function signToken(user) {
   return jwt.sign({ id: user.user_id, role: user.user_role }, JWT_SECRET, {
@@ -30,8 +30,24 @@ async function getFixtures() {
     room: `SELECT room_id, slug FROM room ORDER BY room_id LIMIT 1`,
     roomProduct: `SELECT room_id, product_id FROM room_product ORDER BY room_id, product_id LIMIT 1`,
     material: `SELECT slug FROM materials WHERE deleted_at IS NULL ORDER BY material_id LIMIT 1`,
-    order: `SELECT order_id, order_hash, user_id FROM orders ORDER BY order_id LIMIT 1`,
-    payment: `SELECT payment_id FROM payments WHERE deleted_at IS NULL ORDER BY payment_id LIMIT 1`,
+    order: `
+      SELECT o.order_id, o.order_hash, o.user_id
+      FROM orders o
+      WHERE o.deleted_at IS NULL
+        AND o.user_id = (SELECT user_id FROM "user" WHERE deleted_at IS NULL AND user_role = 'user' ORDER BY user_id LIMIT 1)
+      ORDER BY o.order_id
+      LIMIT 1
+    `,
+    payment: `
+      SELECT p.payment_id
+      FROM payments p
+      JOIN orders o ON o.payment_id = p.payment_id
+      WHERE p.deleted_at IS NULL
+        AND o.deleted_at IS NULL
+        AND o.user_id = (SELECT user_id FROM "user" WHERE deleted_at IS NULL AND user_role = 'user' ORDER BY user_id LIMIT 1)
+      ORDER BY p.payment_id
+      LIMIT 1
+    `,
     coupon: `SELECT couponcode_id, couponcode_code FROM couponcode WHERE deleted_at IS NULL ORDER BY couponcode_id LIMIT 1`,
   };
 

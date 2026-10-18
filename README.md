@@ -137,14 +137,10 @@ npm run qa:day4-contract
 
 ```text
 SONA_SPACE-Server/
-├── app.js
+├── src/            (app.js, config/, shared/, modules/)
 ├── bin/
-├── config/
 ├── db/
-│   ├── init/
-│   ├── furnitown.sql
-│   └── transaction.js
-├── middleware/
+│   └── init/
 ├── routes/
 ├── services/
 ├── public/

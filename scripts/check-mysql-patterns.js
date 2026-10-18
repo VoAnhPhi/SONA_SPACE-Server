@@ -7,17 +7,9 @@ const path = require("path");
 const ROOT = process.cwd();
 
 const SCAN_TARGETS = [
-  "app.js",
-  "config",
+  "src",
   "db",
-  "middleware",
   "migrations",
-  "models",
-  "routes",
-  "services",
-  "chatbotSocket.js",
-  "chatbotSocket-gemini.js",
-  "chatbotSocket-gemini-25-pro.js",
 ];
 
 const ALLOWED_EXT = new Set([".js", ".cjs", ".mjs", ".ts", ".sql"]);

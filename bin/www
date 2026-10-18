@@ -4,7 +4,10 @@
  * Module dependencies.
  */
 
-var app = require("../app");
+var config = require("../src/config/env");
+config.assertRequired();
+
+var app = require("../src/app");
 var debug = require("debug")("fpoly-api:server");
 var http = require("http");
 
@@ -12,7 +15,7 @@ var http = require("http");
  * Get port from environment and store in Express.
  */
 
-var port = normalizePort(process.env.PORT || "3501");
+var port = normalizePort(config.port);
 app.set("port", port);
 console.log(`Server will run on port: ${port}`);
 
@@ -25,17 +28,11 @@ var server = http.createServer(app);
 // SOCKET.IO setup
 const { Server } = require("socket.io");
 const io = new Server(server, { 
-  cors: { origin: "*" },
+  cors: { origin: config.corsOrigin },
   maxHttpBufferSize: 20 * 1024 * 1024 // 20MB
 });
 
-// SOCKET.IO dùng cho chat bot OpenAI (namespace mặc định)
-const chatbotSocket = require("../chatbotSocket");
-chatbotSocket(io);
-
-// SOCKET.IO dùng cho Gemini 2.5 Pro chat bot với namespace riêng
-const chatbotSocketGemini25 = require("../chatbotSocket-gemini-25-pro");
-chatbotSocketGemini25(io);
+require("../src/realtime")(io);
 
 /**
  * Listen on provided port, on all network interfaces.

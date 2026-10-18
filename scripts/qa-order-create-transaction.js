@@ -1,4 +1,4 @@
-const db = require("../config/database");
+const db = require("../src/config/database");
 
 const fixture = {
   userId: 3,

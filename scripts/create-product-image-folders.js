@@ -2,7 +2,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
-const db = require("../config/database");
+const db = require("../src/config/database");
 
 const OUTPUT_DIR = path.join(__dirname, "../public/uploads/recovered-products");
 const MANIFEST_PATH = path.join(OUTPUT_DIR, "manifest.json");

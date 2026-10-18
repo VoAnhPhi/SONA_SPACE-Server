@@ -1,13 +1,11 @@
-const fs = require("fs");
 const http = require("http");
 const path = require("path");
 const jwt = require("jsonwebtoken");
 
-const app = require("../app");
-const db = require("../config/database");
+const app = require("../src/app");
+const db = require("../src/config/database");
 
-const JWT_SECRET = process.env.JWT_SECRET || "furnitown-secret-key";
-const DASHBOARD_FILE = path.join(__dirname, "../routes/dashboard.js");
+const JWT_SECRET = process.env.JWT_SECRET;
 
 function signToken(user) {
   return jwt.sign({ id: user.user_id, role: user.user_role }, JWT_SECRET, {
@@ -122,16 +120,9 @@ function summarize(results) {
 }
 
 function parseDashboardRoutes() {
-  const source = fs.readFileSync(DASHBOARD_FILE, "utf8");
-  const regex = /router\.get\(\s*["']([^"']+)["']/g;
-  const routes = [];
-  let match;
-
-  while ((match = regex.exec(source))) {
-    routes.push(match[1]);
-  }
-
-  return routes;
+  // admin-pages.js is plain data, so the table can be required without booting the app
+  const { pages } = require(path.join(__dirname, "..", "src", "admin", "admin-pages.js"));
+  return pages.map((page) => page.path);
 }
 
 function resolveDashboardPath(routePath, fixtures) {
