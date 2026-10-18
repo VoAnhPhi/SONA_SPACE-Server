@@ -24,7 +24,7 @@ const mounts = [
   { path: "/api/wishlists-id", router: require("./wishlists/wishlists-by-user.routes") },
 
   // protected
-  { path: "/api/users", router: require("../../routes/users") },
+  { path: "/api/users", router: require("./users/users.routes") },
   { path: "/api/wishlists", use: [verifyToken], router: require("./wishlists/wishlists.routes") },
   { path: "/api/orders", router: require("../../routes/orders") },
   { path: "/api/order-status", use: [verifyToken], router: require("../../routes/orderStatus") },
