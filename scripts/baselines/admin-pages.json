@@ -1,0 +1,276 @@
+{
+  "/dashboard/": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Tổng quan"
+  },
+  "/dashboard/Categorynews": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Danh mục tin"
+  },
+  "/dashboard/Categorynews/addcategorynews": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Thêm danh mục tin"
+  },
+  "/dashboard/Categorynews/editcategorynews/:slug": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Sửa danh mục tin"
+  },
+  "/dashboard/accounts": {
+    "status": 302,
+    "location": "/dashboard/users"
+  },
+  "/dashboard/addcategories": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Thêm danh mục sản phẩm"
+  },
+  "/dashboard/addroom": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Thêm phòng"
+  },
+  "/dashboard/banners": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Quản lý Banner"
+  },
+  "/dashboard/banners/add": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Thêm banner mới"
+  },
+  "/dashboard/banners/edit/:id": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Chỉnh Sửa Banner"
+  },
+  "/dashboard/categories": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Danh mục sản phẩm"
+  },
+  "/dashboard/categories/add": {
+    "status": 302,
+    "location": "/dashboard/addcategories"
+  },
+  "/dashboard/categories/edit/:slug": {
+    "status": 302,
+    "location": "/dashboard/editcategories/modena-2-5-cho"
+  },
+  "/dashboard/chatbot": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Sửa nội dung chat bot"
+  },
+  "/dashboard/colors": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Màu sắc"
+  },
+  "/dashboard/colors/add": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Thêm màu mới"
+  },
+  "/dashboard/colors/edit/:slug": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Sửa màu sắc"
+  },
+  "/dashboard/comment": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Quản lý bình luận"
+  },
+  "/dashboard/comment/add": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Thêm vật liệu"
+  },
+  "/dashboard/comment/edit/:slug": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Chỉnh sửa vật liệu"
+  },
+  "/dashboard/contact-forms-design": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Yêu cầu thiết kế"
+  },
+  "/dashboard/contact-forms-design/:id": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Chi tiết yêu cầu thiết kế"
+  },
+  "/dashboard/editcategories/:slug": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Thêm danh mục sản phẩm"
+  },
+  "/dashboard/editroom/:slug": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Chỉnh sửa phòng"
+  },
+  "/dashboard/events": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Sự kiện"
+  },
+  "/dashboard/events/add": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Thêm sự kiện mới"
+  },
+  "/dashboard/events/edit/:slug": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Chỉnh sửa sự kiện"
+  },
+  "/dashboard/material": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Danh mục vật liệu"
+  },
+  "/dashboard/material/add": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Thêm vật liệu"
+  },
+  "/dashboard/material/edit/:slug": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Chỉnh sửa vật liệu"
+  },
+  "/dashboard/news": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Tin tức"
+  },
+  "/dashboard/news/addnews": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Thêm tin tức"
+  },
+  "/dashboard/news/editnews/:slug": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Sửa tin tức"
+  },
+  "/dashboard/notifications/type-list": {
+    "status": 302,
+    "location": "/dashboard/typeNotify"
+  },
+  "/dashboard/notify": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Thông báo"
+  },
+  "/dashboard/notify/addNotify": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Tạo Thông Báo"
+  },
+  "/dashboard/orders": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Đơn hàng"
+  },
+  "/dashboard/orders/detail/:id": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": null
+  },
+  "/dashboard/orders/invoice/:id": {
+    "status": 200,
+    "title": "Order Invoice",
+    "heading": null
+  },
+  "/dashboard/orders/view/:id": {
+    "status": 302,
+    "location": "/dashboard/orders/detail/4"
+  },
+  "/dashboard/products": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Sản phẩm"
+  },
+  "/dashboard/products/add": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Thêm sản phẩm"
+  },
+  "/dashboard/products/edit/:slug": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Sửa sản phẩm"
+  },
+  "/dashboard/profile": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Hồ sơ quản trị"
+  },
+  "/dashboard/room": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Không gian"
+  },
+  "/dashboard/settings": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Cài đặt hệ thống"
+  },
+  "/dashboard/staff": {
+    "status": 302,
+    "location": "/dashboard/users"
+  },
+  "/dashboard/typeNotify": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Kiểu thông báo"
+  },
+  "/dashboard/typeNotify/addtypeNotify": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Thêm kiểu thông báo"
+  },
+  "/dashboard/typeNotify/edittypeNotify/:id": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Sửa kiểu thông báo"
+  },
+  "/dashboard/typeNotify/edittypenotify/:id": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Sửa kiểu thông báo"
+  },
+  "/dashboard/users": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Quản lý người dùng"
+  },
+  "/dashboard/users/edit": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Cập nhật thông tin người dùng"
+  },
+  "/dashboard/voucher": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Voucher"
+  },
+  "/dashboard/voucher/addvoucher": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Thêm Voucher"
+  },
+  "/dashboard/voucher/editvoucher/:id": {
+    "status": 200,
+    "title": "Sona Space - Dashboard",
+    "heading": "Sửa Voucher"
+  }
+}

@@ -14,6 +14,8 @@
 		"qa:day2-contract": "node ./scripts/qa-day2-contract.js",
 		"qa:day3-contract": "node ./scripts/qa-day3-contract.js",
 		"qa:day4-contract": "node ./scripts/qa-day4-contract.js",
+		"qa:admin-render": "node ./scripts/qa-admin-render.js",
+		"qa:momo-payload": "node ./scripts/qa-momo-payload.js",
 		"qa:order-create-transaction": "node ./scripts/qa-order-create-transaction.js",
 		"qa:product-upload-contract": "node ./scripts/qa-product-upload-contract.js",
 		"upload:recovered-products": "node ./scripts/upload-recovered-product-images-to-cloudinary.js",
