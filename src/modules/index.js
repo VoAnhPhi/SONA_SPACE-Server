@@ -12,7 +12,7 @@ const mounts = [
 
   // public
   { path: "/api/products", router: require("../../routes/products") },
-  { path: "/api/categories", router: require("../../routes/categories") },
+  { path: "/api/categories", router: require("./categories/categories.routes") },
   { path: "/api/variants", router: require("../../routes/variants") },
   { path: "/api/rooms", router: require("../../routes/rooms") },
   { path: "/api/news", router: require("../../routes/news") },
@@ -42,7 +42,7 @@ const mounts = [
     router: require("../../routes/notify"),
   },
   { path: "/api/typeNotify", router: require("../../routes/typenotify") },
-  { path: "/api/attribute", router: require("../../routes/attributes") },
+  { path: "/api/attribute", router: require("./categories/attributes.routes") },
   { path: "/api/events", router: require("../../routes/events") },
   { path: "/api/chat", router: require("../../routes/chat") },
   { path: "/api/contact-forms", router: require("../../routes/contactForms") },

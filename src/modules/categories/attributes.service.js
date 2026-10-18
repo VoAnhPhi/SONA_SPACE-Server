@@ -1,22 +1,29 @@
-const express = require("express");
-const router = express.Router();
-const db = require("../src/config/database");
-const { verifyToken, isAdmin } = require("../src/shared/middleware/auth");
+"use strict";
 
-router.post("/:categoryId", verifyToken, isAdmin, async (req, res) => {
-  try {
-    const categoryId = Number(req.params.categoryId);
-    const { attribute_name, value_type, unit, is_required } = req.body;
+const db = require("../../config/database");
+const HttpError = require("../../shared/http/http-error");
+const guard = require("../../shared/http/guard");
+
+/** Define an attribute (size, material, ...) for a category. */
+function create(rawCategoryId, body) {
+  const failure = () => ({
+    success: false,
+    message: "Server error while creating attribute.",
+  });
+
+  return guard(failure, async () => {
+    const categoryId = Number(rawCategoryId);
+    const { attribute_name, value_type, unit, is_required } = body;
 
     if (!Number.isInteger(categoryId)) {
-      return res.status(400).json({
+      throw new HttpError(400, {
         success: false,
         message: "Category ID is invalid.",
       });
     }
 
     if (!attribute_name || !value_type) {
-      return res.status(400).json({
+      throw new HttpError(400, {
         success: false,
         message: "Attribute name and value type are required.",
       });
@@ -37,33 +44,34 @@ router.post("/:categoryId", verifyToken, isAdmin, async (req, res) => {
       ]
     );
 
-    return res.status(201).json({
+    return {
       success: true,
       message: "Attribute created successfully.",
       attribute_id: rows[0].attribute_id,
       value_type: rows[0].value_type,
       unit: rows[0].unit,
       is_required: rows[0].is_required,
-    });
-  } catch (err) {
-    return res.status(500).json({
-      success: false,
-      message: "Server error while creating attribute.",
-    });
-  }
-});
+    };
+  });
+}
 
-router.get("/:categoryId/attributes", async (req, res) => {
-  const categoryId = Number(req.params.categoryId);
+/** Attributes of a category that are not deleted. */
+function listByCategory(rawCategoryId) {
+  const categoryId = Number(rawCategoryId);
 
   if (!Number.isInteger(categoryId)) {
-    return res.status(400).json({
+    throw new HttpError(400, {
       success: false,
       message: "Category ID is required.",
     });
   }
 
-  try {
+  const failure = () => ({
+    success: false,
+    message: `Server error while loading attributes for category ID ${categoryId}.`,
+  });
+
+  return guard(failure, async () => {
     const { rows } = await db.query(
       `
       SELECT
@@ -80,13 +88,8 @@ router.get("/:categoryId/attributes", async (req, res) => {
       [categoryId]
     );
 
-    return res.status(200).json(rows);
-  } catch (err) {
-    return res.status(500).json({
-      success: false,
-      message: `Server error while loading attributes for category ID ${categoryId}.`,
-    });
-  }
-});
+    return rows;
+  });
+}
 
-module.exports = router;
+module.exports = { create, listByCategory };
