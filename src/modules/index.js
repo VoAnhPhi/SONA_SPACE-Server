@@ -30,7 +30,7 @@ const mounts = [
   { path: "/api/order-status", use: [verifyToken], router: require("../../routes/orderStatus") },
   { path: "/api/payments", use: [verifyToken], router: require("../../routes/payments") },
   { path: "/api/couponcodes", use: [verifyToken], router: require("../../routes/couponcodes") },
-  { path: "/api/color", router: require("../../routes/color") },
+  { path: "/api/color", router: require("./colors/colors.routes") },
   { path: "/api/upload", router: require("../../routes/upload") },
   { path: "/api/banners", router: require("../../routes/banners") },
   { path: "/api/materials", router: require("../../routes/materials") },

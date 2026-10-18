@@ -1,7 +1,8 @@
-const express = require("express");
-const router = express.Router();
-const db = require("../src/config/database");
-const { verifyToken, isAdmin } = require("../src/shared/middleware/auth");
+"use strict";
+
+const db = require("../../config/database");
+const HttpError = require("../../shared/http/http-error");
+const guard = require("../../shared/http/guard");
 
 function getColorCode(body = {}) {
   return body.color_hex ?? body.color_code ?? null;
@@ -10,7 +11,7 @@ function getColorCode(body = {}) {
 function buildColorSlug(colorName, colorId) {
   const normalized = String(colorName || "")
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[̀-ͯ]/g, "")
     .toLowerCase()
     .trim()
     .replace(/[^a-z0-9]+/g, "-")
@@ -35,13 +36,9 @@ function mapColorRow(row) {
   };
 }
 
-/**
- * @route   GET /api/color/filter
- * @desc    Get active colors for public catalog filters
- * @access  Public
- */
-router.get("/filter", async (req, res) => {
-  try {
+/** Active colors for public catalog filters. */
+function listActive() {
+  return guard("Failed to fetch colors", async () => {
     const { rows } = await db.query(
       `
       SELECT color_id, color_name, color_code, created_at, updated_at, deleted_at
@@ -50,25 +47,14 @@ router.get("/filter", async (req, res) => {
       ORDER BY color_id ASC
     `
     );
+    return rows.map(mapColorRow);
+  });
+}
 
-    res.json(rows.map(mapColorRow));
-  } catch (error) {
-    res.status(500).json({ error: "Failed to fetch colors" });
-  }
-});
+function listByProductSlug(slug) {
+  if (!slug) throw new HttpError(400, { message: "Slug is required" });
 
-/**
- * @route   GET /api/color/by-product/:slug
- * @desc    Get colors by product slug
- * @access  Public
- */
-router.get("/by-product/:slug", async (req, res) => {
-  const slug = req.params.slug;
-  if (!slug) {
-    return res.status(400).json({ message: "Slug is required" });
-  }
-
-  try {
+  return guard("Failed to fetch colors by product", async () => {
     const { rows } = await db.query(
       `
       SELECT DISTINCT
@@ -86,15 +72,13 @@ router.get("/by-product/:slug", async (req, res) => {
     `,
       [slug]
     );
+    return rows.map(mapColorRow);
+  });
+}
 
-    res.json(rows.map(mapColorRow));
-  } catch (error) {
-    res.status(500).json({ error: "Failed to fetch colors by product" });
-  }
-});
-
-router.get("/admin", verifyToken, isAdmin, async (req, res) => {
-  try {
+/** Every color with the number of products using it (admin). */
+function listAll() {
+  return guard("Failed to fetch all colors", async () => {
     const { rows } = await db.query(
       `
       SELECT
@@ -117,21 +101,15 @@ router.get("/admin", verifyToken, isAdmin, async (req, res) => {
       ORDER BY c.color_id ASC
     `
     );
+    return rows.map(mapColorRow);
+  });
+}
 
-    res.json(rows.map(mapColorRow));
-  } catch (error) {
-    res.status(500).json({ error: "Failed to fetch all colors" });
-  }
-});
+/** One color by slug or numeric id (admin). */
+function getBySlug(slug) {
+  if (!slug) throw new HttpError(400, { message: "Slug is required" });
 
-router.get("/admin/:slug", verifyToken, isAdmin, async (req, res) => {
-  const { slug } = req.params;
-
-  if (!slug) {
-    return res.status(400).json({ message: "Slug is required" });
-  }
-
-  try {
+  return guard("Failed to fetch color", async () => {
     const { rows } = await db.query(
       `
       SELECT color_id, color_name, color_code, created_at, updated_at, deleted_at
@@ -145,27 +123,20 @@ router.get("/admin/:slug", verifyToken, isAdmin, async (req, res) => {
       mappedColors.find((item) => item.color_slug === slug) ||
       mappedColors.find((item) => String(item.color_id) === slug);
 
-    if (!color) {
-      return res.status(404).json({ message: "Color not found" });
-    }
+    if (!color) throw new HttpError(404, { message: "Color not found" });
+    return color;
+  });
+}
 
-    res.json(color);
-  } catch (error) {
-    res.status(500).json({ error: "Failed to fetch color" });
-  }
-});
-
-router.post("/admin", verifyToken, isAdmin, async (req, res) => {
-  const { color_name } = req.body;
-  const colorCode = getColorCode(req.body);
+function create(body) {
+  const { color_name } = body;
+  const colorCode = getColorCode(body);
 
   if (!color_name || !colorCode) {
-    return res
-      .status(400)
-      .json({ message: "color_name and color_hex are required" });
+    throw new HttpError(400, { message: "color_name and color_hex are required" });
   }
 
-  try {
+  return guard("Failed to create color", async () => {
     const { rows } = await db.query(
       `
       INSERT INTO color (color_code, color_name, created_at, updated_at)
@@ -175,27 +146,22 @@ router.post("/admin", verifyToken, isAdmin, async (req, res) => {
       [colorCode, color_name]
     );
 
-    res.status(201).json({
+    return {
       message: "Color created successfully",
       color: mapColorRow(rows[0]),
-    });
-  } catch (error) {
-    res.status(500).json({ error: "Failed to create color" });
-  }
-});
+    };
+  });
+}
 
-router.put("/admin/:id", verifyToken, isAdmin, async (req, res) => {
-  const colorId = req.params.id;
-  const { color_name, status } = req.body;
-  const colorCode = getColorCode(req.body);
+function update(colorId, body) {
+  const { color_name, status } = body;
+  const colorCode = getColorCode(body);
   const normalizedStatus =
     status === undefined || status === null ? null : Number(status);
 
-  if (!colorId) {
-    return res.status(400).json({ message: "Color ID is required" });
-  }
+  if (!colorId) throw new HttpError(400, { message: "Color ID is required" });
 
-  try {
+  return guard("Failed to update color", async () => {
     const { rowCount } = await db.query(
       `
       UPDATE color
@@ -213,70 +179,49 @@ router.put("/admin/:id", verifyToken, isAdmin, async (req, res) => {
       [colorCode, color_name ?? null, normalizedStatus, colorId]
     );
 
-    if (rowCount === 0) {
-      return res.status(404).json({ message: "Color not found" });
-    }
+    if (rowCount === 0) throw new HttpError(404, { message: "Color not found" });
+    return { message: "Color updated successfully" };
+  });
+}
 
-    res.json({ message: "Color updated successfully" });
-  } catch (error) {
-    res.status(500).json({ error: "Failed to update color" });
-  }
-});
+function toggleStatus(colorId) {
+  if (!colorId) throw new HttpError(400, { message: "Color ID is required" });
 
-router.put(
-  "/admin/:id/toggle-status",
-  verifyToken,
-  isAdmin,
-  async (req, res) => {
-    const colorId = req.params.id;
+  return guard("Failed to toggle color status", async () => {
+    const { rows } = await db.query(
+      "SELECT deleted_at FROM color WHERE color_id = $1",
+      [colorId]
+    );
 
-    if (!colorId) {
-      return res.status(400).json({ message: "Color ID is required" });
-    }
+    if (rows.length === 0) throw new HttpError(404, { message: "Color not found" });
 
-    try {
-      const { rows } = await db.query(
-        "SELECT deleted_at FROM color WHERE color_id = $1",
-        [colorId]
-      );
+    const isActive = !rows[0].deleted_at;
+    const nextStatus = isActive ? 0 : 1;
 
-      if (rows.length === 0) {
-        return res.status(404).json({ message: "Color not found" });
-      }
-
-      const isActive = !rows[0].deleted_at;
-      const nextStatus = isActive ? 0 : 1;
-
-      await db.query(
-        `
+    await db.query(
+      `
         UPDATE color
         SET
           deleted_at = CASE WHEN $1 = 1 THEN NULL ELSE CURRENT_TIMESTAMP END,
           updated_at = CURRENT_TIMESTAMP
         WHERE color_id = $2
       `,
-        [nextStatus, colorId]
-      );
+      [nextStatus, colorId]
+    );
 
-      res.json({
-        message: "Color status updated",
-        color_id: colorId,
-        status: nextStatus,
-      });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to toggle color status" });
-    }
-  }
-);
+    return {
+      message: "Color status updated",
+      color_id: colorId,
+      status: nextStatus,
+    };
+  });
+}
 
-router.delete("/admin/:id", verifyToken, isAdmin, async (req, res) => {
-  const colorId = req.params.id;
+/** Colors used by variants are hidden instead of deleted. */
+function remove(colorId) {
+  if (!colorId) throw new HttpError(400, { message: "Color ID is required" });
 
-  if (!colorId) {
-    return res.status(400).json({ message: "Color ID is required" });
-  }
-
-  try {
+  return guard("Failed to delete color", async () => {
     const { rows: products } = await db.query(
       "SELECT COUNT(*)::int AS count FROM variant_product WHERE color_id = $1",
       [colorId]
@@ -292,10 +237,10 @@ router.delete("/admin/:id", verifyToken, isAdmin, async (req, res) => {
         [colorId]
       );
 
-      return res.json({
+      return {
         message: "Color is still used by products and has been hidden instead",
         status: "hidden",
-      });
+      };
     }
 
     const { rowCount } = await db.query(
@@ -303,14 +248,18 @@ router.delete("/admin/:id", verifyToken, isAdmin, async (req, res) => {
       [colorId]
     );
 
-    if (rowCount === 0) {
-      return res.status(404).json({ message: "Color not found" });
-    }
+    if (rowCount === 0) throw new HttpError(404, { message: "Color not found" });
+    return { message: "Color deleted successfully" };
+  });
+}
 
-    res.json({ message: "Color deleted successfully" });
-  } catch (error) {
-    res.status(500).json({ error: "Failed to delete color" });
-  }
-});
-
-module.exports = router;
+module.exports = {
+  listActive,
+  listByProductSlug,
+  listAll,
+  getBySlug,
+  create,
+  update,
+  toggleStatus,
+  remove,
+};
