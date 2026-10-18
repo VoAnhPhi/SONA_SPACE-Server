@@ -19,7 +19,7 @@ const mounts = [
   { path: "/api/news-categories", router: require("./news/news-categories.routes") },
   { path: "/api/contact-form-design", router: require("./contact/design-forms.routes") },
   { path: "/api/comments", router: require("./comments/comments.routes") },
-  { path: "/api/debug", router: require("../../routes/debug"), enabled: !config.isProduction },
+  { path: "/api/debug", router: require("./debug/debug.routes"), enabled: !config.isProduction },
   { path: "/api/orders-id", router: require("../../routes/orders-id") },
   { path: "/api/wishlists-id", router: require("./wishlists/wishlists-by-user.routes") },
 
@@ -31,10 +31,10 @@ const mounts = [
   { path: "/api/payments", use: [verifyToken], router: require("../../routes/payments") },
   { path: "/api/couponcodes", use: [verifyToken], router: require("./coupons/coupons.routes") },
   { path: "/api/color", router: require("./colors/colors.routes") },
-  { path: "/api/upload", router: require("../../routes/upload") },
+  { path: "/api/upload", router: require("./uploads/uploads.routes") },
   { path: "/api/banners", router: require("./banners/banners.routes") },
   { path: "/api/materials", router: require("./materials/materials.routes") },
-  { path: "/api/revenue", router: require("../../routes/revenue") },
+  { path: "/api/revenue", router: require("./reports/reports.routes") },
   { path: "/api/notify", router: require("./notifications/notifications.routes") },
   {
     path: "/api/notifications",
@@ -44,7 +44,7 @@ const mounts = [
   { path: "/api/typeNotify", router: require("./notifications/notification-types.routes") },
   { path: "/api/attribute", router: require("./categories/attributes.routes") },
   { path: "/api/events", router: require("./events/events.routes") },
-  { path: "/api/chat", router: require("../../routes/chat") },
+  { path: "/api/chat", router: require("./chat/chat.routes") },
   { path: "/api/contact-forms", router: require("./contact/contact.routes") },
 ];
 

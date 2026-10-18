@@ -1,7 +1,7 @@
-const express = require("express");
-const router = express.Router();
-const db = require("../src/config/database");
-const { verifyToken, isAdmin } = require("../src/shared/middleware/auth");
+"use strict";
+
+const db = require("../../config/database");
+const guard = require("../../shared/http/guard");
 
 require("dayjs/locale/vi");
 const dayjs = require("dayjs");
@@ -38,6 +38,7 @@ function getTimeConfig(type, limit) {
   };
 }
 
+/** The buckets (days, months or years) a chart covers: an explicit from-to range or the last `limit`. */
 function buildDateList({ type, from, to, limit }) {
   const config = getTimeConfig(type, limit);
   const dateList = [];
@@ -62,9 +63,12 @@ function buildDateList({ type, from, to, limit }) {
   return { config, dateList };
 }
 
-router.get("/", verifyToken, isAdmin, async (req, res) => {
-  try {
-    const { type = "day", from, to, limit } = req.query;
+const SERVER_ERROR = { error: "Internal server error" };
+
+/** Revenue of completed orders per bucket. */
+function revenueSeries(query) {
+  return guard(SERVER_ERROR, async () => {
+    const { type = "day", from, to, limit } = query;
     const { config, dateList } = buildDateList({ type, from, to, limit });
 
     const { rows: orders } = await db.query(
@@ -91,16 +95,14 @@ router.get("/", verifyToken, isAdmin, async (req, res) => {
       }
     }
 
-    const result = dateList.map((date) => resultMap[date]);
-    return res.json(result);
-  } catch (error) {
-    return res.status(500).json({ error: "Internal server error" });
-  }
-});
+    return dateList.map((date) => resultMap[date]);
+  });
+}
 
-router.get("/user", verifyToken, isAdmin, async (req, res) => {
-  try {
-    const { type = "day", from, to, limit } = req.query;
+/** New registrations per bucket. */
+function userSeries(query) {
+  return guard(SERVER_ERROR, async () => {
+    const { type = "day", from, to, limit } = query;
     const { config, dateList } = buildDateList({ type, from, to, limit });
 
     const { rows: userCounts } = await db.query(
@@ -126,20 +128,16 @@ router.get("/user", verifyToken, isAdmin, async (req, res) => {
       }
     }
 
-    const result = dateList.map((date) => resultMap[date]);
-    return res.json(result);
-  } catch (error) {
-    return res.status(500).json({ error: "Internal server error" });
-  }
-});
+    return dateList.map((date) => resultMap[date]);
+  });
+}
 
-router.get("/stats", verifyToken, isAdmin, async (req, res) => {
+/** Dashboard headline numbers. Errors propagate to the central handler (the original had no try/catch). */
+async function dashboardStats() {
   const currentMonth = dayjs().locale("vi").format("MMMM");
   const fullMonth = currentMonth.charAt(0).toUpperCase() + currentMonth.slice(1);
 
-  const { rows: totalOrderRows } = await db.query(
-    "SELECT COUNT(*)::int AS total_order FROM orders"
-  );
+  const { rows: totalOrderRows } = await db.query("SELECT COUNT(*)::int AS total_order FROM orders");
   const { rows: completedOrderRows } = await db.query(
     "SELECT COUNT(*)::int AS completed_order FROM orders WHERE order_status = $1",
     [ORDER_STATUS_COMPLETED]
@@ -173,10 +171,11 @@ router.get("/stats", verifyToken, isAdmin, async (req, res) => {
   const revenueThisMonth = Number(revenueThisMonthRows[0]?.revenue_this_month || 0);
   const revenueTotal = Number(revenueTotalRows[0]?.revenue_total || 0);
 
+  // Design consultations bring no revenue yet
   const designRevenueThisMonth = 0;
   const designRevenueTotal = 0;
 
-  return res.json({
+  return {
     totalOrder,
     completedOrder,
     shippingOrder,
@@ -189,7 +188,7 @@ router.get("/stats", verifyToken, isAdmin, async (req, res) => {
       design: designRevenueTotal,
     },
     monthName: fullMonth,
-  });
-});
+  };
+}
 
-module.exports = router;
+module.exports = { revenueSeries, userSeries, dashboardStats };

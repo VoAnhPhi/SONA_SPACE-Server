@@ -1,13 +1,15 @@
-const express = require("express");
-const router = express.Router();
-const db = require("../src/config/database");
-const { verifyToken, isAdmin } = require("../src/shared/middleware/auth");
+"use strict";
+
+const db = require("../../config/database");
+const HttpError = require("../../shared/http/http-error");
+const guard = require("../../shared/http/guard");
 
 const DEFAULT_CONTEXT =
   "Ban la tro ly AI than thien, tra loi ngan gon va huu ich cho khach truy cap website.";
 
-router.get("/", async (req, res) => {
-  try {
+/** The system prompt the chatbot starts from. */
+function getContext() {
+  return guard({ error: "Loi server" }, async () => {
     const { rows } = await db.query(`
       SELECT content
       FROM chatbot_context
@@ -16,18 +18,15 @@ router.get("/", async (req, res) => {
       LIMIT 1
     `);
 
-    const context = rows[0]?.content || DEFAULT_CONTEXT;
-    return res.json({ context });
-  } catch (error) {
-    return res.status(500).json({ error: "Loi server" });
-  }
-});
+    return { context: rows[0]?.content || DEFAULT_CONTEXT };
+  });
+}
 
-router.put("/context", verifyToken, isAdmin, async (req, res) => {
-  try {
-    const { context } = req.body;
+function updateContext(body) {
+  return guard({ error: "Loi server" }, async () => {
+    const { context } = body;
     if (!context || !String(context).trim()) {
-      return res.status(400).json({ error: "Vui long nhap noi dung" });
+      throw new HttpError(400, { error: "Vui long nhap noi dung" });
     }
 
     const normalized = String(context).trim();
@@ -44,13 +43,11 @@ router.put("/context", verifyToken, isAdmin, async (req, res) => {
       );
     }
 
-    return res.status(201).json({
+    return {
       message: "Cap nhat thanh cong.",
       context: normalized,
-    });
-  } catch (error) {
-    return res.status(500).json({ error: "Loi server" });
-  }
-});
+    };
+  });
+}
 
-module.exports = router;
+module.exports = { getContext, updateContext };

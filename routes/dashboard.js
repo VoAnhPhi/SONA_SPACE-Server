@@ -1,7 +1,6 @@
 const express = require("express");
 const router = express.Router();
 const authMiddleware = require("../src/shared/middleware/auth");
-const { route } = require("./upload");
 const { isAdmin } = require("../src/shared/middleware/auth");
 
 // Middleware to check if user is admin
